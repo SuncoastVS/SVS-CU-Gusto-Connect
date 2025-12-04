@@ -220,9 +220,28 @@ export async function registerRoutes(
 
       const clickup = new ClickUpService(config.clickupApiKey);
       
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 7);
+      let startDate: Date;
+      let endDate: Date;
+      
+      if (req.query.startDate && req.query.endDate) {
+        const startTs = parseInt(req.query.startDate as string);
+        const endTs = parseInt(req.query.endDate as string);
+        
+        if (isNaN(startTs) || isNaN(endTs)) {
+          return res.status(400).json({ error: "Invalid date parameters" });
+        }
+        
+        startDate = new Date(startTs);
+        endDate = new Date(endTs);
+        
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+          return res.status(400).json({ error: "Invalid date values" });
+        }
+      } else {
+        endDate = new Date();
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() - 7);
+      }
 
       const entries = await clickup.getTimeEntriesWithFolders(config.clickupTeamId, {
         startDate,

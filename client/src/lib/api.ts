@@ -77,8 +77,16 @@ export async function fetchClickUpTeams(): Promise<ClickUpTeam[]> {
   return res.json();
 }
 
-export async function fetchClickUpTimeEntries(): Promise<ClickUpTimeEntry[]> {
-  const res = await fetch(`${API_BASE}/clickup/time-entries`);
+export async function fetchClickUpTimeEntries(startDate?: Date, endDate?: Date): Promise<ClickUpTimeEntry[]> {
+  let url = `${API_BASE}/clickup/time-entries`;
+  if (startDate && endDate) {
+    const params = new URLSearchParams({
+      startDate: startDate.getTime().toString(),
+      endDate: endDate.getTime().toString(),
+    });
+    url += `?${params.toString()}`;
+  }
+  const res = await fetch(url);
   if (!res.ok) {
     const error = await res.json();
     throw new Error(error.error || "Failed to fetch time entries");

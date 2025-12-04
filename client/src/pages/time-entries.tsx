@@ -20,7 +20,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchClickUpTimeEntries, fetchConfiguration } from "@/lib/api";
 import { Link } from "wouter";
 import { useState, useMemo } from "react";
-import { format, startOfMonth, endOfMonth, getDaysInMonth, isWithinInterval, parseISO } from "date-fns";
+import { format, getDaysInMonth } from "date-fns";
 import type { DateRange } from "react-day-picker";
 
 interface BiweeklyPeriod {
@@ -92,32 +92,7 @@ export default function TimeEntries() {
     queryFn: fetchConfiguration,
   });
 
-  const { data: entries = [], isLoading, error, refetch, isRefetching } = useQuery({
-    queryKey: ["clickup-time-entries"],
-    queryFn: fetchClickUpTimeEntries,
-    enabled: !!config?.clickupApiKey && !!config?.clickupTeamId,
-    retry: false,
-  });
-
   const isConfigured = config?.clickupApiKey && config?.clickupTeamId;
-
-  const { uniqueFolders, uniqueTeams, uniqueUsers } = useMemo(() => {
-    const folders = new Set<string>();
-    const teams = new Set<string>();
-    const users = new Set<string>();
-    
-    entries.forEach(entry => {
-      if (entry.folderName) folders.add(entry.folderName);
-      if (entry.teamName) teams.add(entry.teamName);
-      if (entry.user) users.add(entry.user);
-    });
-    
-    return {
-      uniqueFolders: Array.from(folders).sort(),
-      uniqueTeams: Array.from(teams).sort(),
-      uniqueUsers: Array.from(users).sort(),
-    };
-  }, [entries]);
 
   const getActiveDateRange = useMemo(() => {
     if (dateMode === "biweekly") {
@@ -137,6 +112,36 @@ export default function TimeEntries() {
     return null;
   }, [dateMode, selectedPeriod, customDateRange, biweeklyPeriods]);
 
+  const { data: entries = [], isLoading, error, refetch, isRefetching } = useQuery({
+    queryKey: ["clickup-time-entries", getActiveDateRange?.start?.getTime(), getActiveDateRange?.end?.getTime()],
+    queryFn: () => {
+      if (getActiveDateRange) {
+        return fetchClickUpTimeEntries(getActiveDateRange.start, getActiveDateRange.end);
+      }
+      return fetchClickUpTimeEntries();
+    },
+    enabled: !!isConfigured && !!getActiveDateRange,
+    retry: false,
+  });
+
+  const { uniqueFolders, uniqueTeams, uniqueUsers } = useMemo(() => {
+    const folders = new Set<string>();
+    const teams = new Set<string>();
+    const users = new Set<string>();
+    
+    entries.forEach(entry => {
+      if (entry.folderName) folders.add(entry.folderName);
+      if (entry.teamName) teams.add(entry.teamName);
+      if (entry.user) users.add(entry.user);
+    });
+    
+    return {
+      uniqueFolders: Array.from(folders).sort(),
+      uniqueTeams: Array.from(teams).sort(),
+      uniqueUsers: Array.from(users).sort(),
+    };
+  }, [entries]);
+
   const filteredEntries = useMemo(() => {
     return entries.filter(entry => {
       const matchesSearch = searchQuery === "" || 
@@ -149,22 +154,9 @@ export default function TimeEntries() {
       const matchesTeam = teamFilter === "all" || entry.teamName === teamFilter;
       const matchesUser = userFilter === "all" || entry.user === userFilter;
       
-      let matchesDate = true;
-      if (getActiveDateRange && entry.start) {
-        try {
-          const entryDate = new Date(parseInt(entry.start));
-          matchesDate = isWithinInterval(entryDate, {
-            start: getActiveDateRange.start,
-            end: getActiveDateRange.end,
-          });
-        } catch {
-          matchesDate = true;
-        }
-      }
-      
-      return matchesSearch && matchesFolder && matchesTeam && matchesUser && matchesDate;
+      return matchesSearch && matchesFolder && matchesTeam && matchesUser;
     });
-  }, [entries, searchQuery, folderFilter, teamFilter, userFilter, getActiveDateRange]);
+  }, [entries, searchQuery, folderFilter, teamFilter, userFilter]);
 
   const totalHours = filteredEntries.reduce((sum, entry) => sum + entry.duration, 0);
 
@@ -193,20 +185,9 @@ export default function TimeEntries() {
   return (
     <Layout>
       <div className="space-y-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight" data-testid="heading-time-entries">Time Entries</h1>
-            <p className="text-muted-foreground mt-1">View time tracked in ClickUp.</p>
-          </div>
-          <Button 
-            onClick={() => refetch()}
-            disabled={!isConfigured || isRefetching}
-            className="gap-2"
-            data-testid="button-refresh-entries"
-          >
-            <RefreshCw className={`w-4 h-4 ${isRefetching ? 'animate-spin' : ''}`} />
-            {isRefetching ? 'Refreshing...' : 'Refresh'}
-          </Button>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight" data-testid="heading-time-entries">Time Entries</h1>
+          <p className="text-muted-foreground mt-1">View time tracked in ClickUp.</p>
         </div>
 
         {!isConfigured ? (
@@ -223,32 +204,6 @@ export default function TimeEntries() {
                 <Link href="/settings">
                   <Button data-testid="button-go-to-settings">Go to Settings</Button>
                 </Link>
-              </div>
-            </CardContent>
-          </Card>
-        ) : isLoading ? (
-          <Card>
-            <CardContent className="py-12">
-              <div className="text-center space-y-4">
-                <RefreshCw className="w-8 h-8 text-muted-foreground mx-auto animate-spin" />
-                <p className="text-muted-foreground">Loading time entries from ClickUp...</p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : error ? (
-          <Card>
-            <CardContent className="py-12">
-              <div className="text-center space-y-4">
-                <AlertCircle className="w-12 h-12 text-destructive mx-auto" />
-                <div>
-                  <h3 className="font-semibold text-lg">Failed to Load Time Entries</h3>
-                  <p className="text-muted-foreground mt-1">
-                    {error instanceof Error ? error.message : "An error occurred"}
-                  </p>
-                </div>
-                <Button variant="outline" onClick={() => refetch()} data-testid="button-retry">
-                  Try Again
-                </Button>
               </div>
             </CardContent>
           </Card>
@@ -294,7 +249,7 @@ export default function TimeEntries() {
             {/* Date Range Controls */}
             <Card>
               <CardContent className="pt-6">
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                     <ToggleGroup
                       type="single"
@@ -369,6 +324,16 @@ export default function TimeEntries() {
                       </Popover>
                     )}
                   </div>
+
+                  <Button 
+                    onClick={() => refetch()}
+                    disabled={!isConfigured || isRefetching || !getActiveDateRange}
+                    className="gap-2"
+                    data-testid="button-refresh-entries"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isRefetching ? 'animate-spin' : ''}`} />
+                    {isRefetching ? 'Loading...' : 'Refresh'}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -444,110 +409,138 @@ export default function TimeEntries() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Time Entries</CardTitle>
-                <CardDescription>
-                  {hasActiveFilters 
-                    ? `Showing ${filteredEntries.length} matching entries`
-                    : `Showing ${filteredEntries.length} entries for ${getDateRangeLabel()}`
-                  }
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                {filteredEntries.length === 0 ? (
-                  <div className="text-center py-12">
-                    <p className="text-muted-foreground" data-testid="text-no-entries">
-                      {hasActiveFilters 
-                        ? "No entries match your filters."
-                        : `No time entries found for ${getDateRangeLabel()}.`
-                      }
-                    </p>
-                    {hasActiveFilters && (
-                      <Button 
-                        variant="link" 
-                        onClick={clearFilters}
-                        className="mt-2"
-                      >
-                        Clear filters
-                      </Button>
-                    )}
+            {isLoading ? (
+              <Card>
+                <CardContent className="py-12">
+                  <div className="text-center space-y-4">
+                    <RefreshCw className="w-8 h-8 text-muted-foreground mx-auto animate-spin" />
+                    <p className="text-muted-foreground">Loading time entries from ClickUp...</p>
                   </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Folder</TableHead>
-                        <TableHead>Task Name</TableHead>
-                        <TableHead>Hours</TableHead>
-                        <TableHead>Team</TableHead>
-                        <TableHead>User</TableHead>
-                        <TableHead>Billable</TableHead>
-                        <TableHead className="w-12"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredEntries.map((entry) => (
-                        <TableRow key={entry.id} data-testid={`entry-row-${entry.id}`}>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <FolderOpen className="w-4 h-4 text-muted-foreground" />
-                              <span className="font-medium">{entry.folderName}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="max-w-xs">
-                            <div className="truncate" title={entry.taskName}>
-                              {entry.taskName}
-                            </div>
-                            {entry.description && (
-                              <div className="text-xs text-muted-foreground truncate" title={entry.description}>
-                                {entry.description}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary" className="font-mono">
-                              {entry.duration.toFixed(2)} hrs
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Users className="w-3 h-3 text-muted-foreground" />
-                              <span className="text-sm">{entry.teamName}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <User className="w-3 h-3 text-muted-foreground" />
-                              {entry.user}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={entry.billable ? "default" : "outline"}>
-                              {entry.billable ? "Billable" : "Non-billable"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {entry.taskId && (
-                              <a
-                                href={`https://app.clickup.com/t/${entry.taskId}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-muted transition-colors"
-                                title="Open in ClickUp"
-                                data-testid={`link-clickup-${entry.id}`}
-                              >
-                                <ExternalLink className="w-4 h-4 text-muted-foreground hover:text-foreground" />
-                              </a>
-                            )}
-                          </TableCell>
+                </CardContent>
+              </Card>
+            ) : error ? (
+              <Card>
+                <CardContent className="py-12">
+                  <div className="text-center space-y-4">
+                    <AlertCircle className="w-12 h-12 text-destructive mx-auto" />
+                    <div>
+                      <h3 className="font-semibold text-lg">Failed to Load Time Entries</h3>
+                      <p className="text-muted-foreground mt-1">
+                        {error instanceof Error ? error.message : "An error occurred"}
+                      </p>
+                    </div>
+                    <Button variant="outline" onClick={() => refetch()} data-testid="button-retry">
+                      Try Again
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Time Entries</CardTitle>
+                  <CardDescription>
+                    {hasActiveFilters 
+                      ? `Showing ${filteredEntries.length} matching entries`
+                      : `Showing ${filteredEntries.length} entries for ${getDateRangeLabel()}`
+                    }
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  {filteredEntries.length === 0 ? (
+                    <div className="text-center py-12">
+                      <p className="text-muted-foreground" data-testid="text-no-entries">
+                        {hasActiveFilters 
+                          ? "No entries match your filters."
+                          : `No time entries found for ${getDateRangeLabel()}.`
+                        }
+                      </p>
+                      {hasActiveFilters && (
+                        <Button 
+                          variant="link" 
+                          onClick={clearFilters}
+                          className="mt-2"
+                        >
+                          Clear filters
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Folder</TableHead>
+                          <TableHead>Task Name</TableHead>
+                          <TableHead>Hours</TableHead>
+                          <TableHead>Team</TableHead>
+                          <TableHead>User</TableHead>
+                          <TableHead>Billable</TableHead>
+                          <TableHead className="w-12"></TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredEntries.map((entry) => (
+                          <TableRow key={entry.id} data-testid={`entry-row-${entry.id}`}>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <FolderOpen className="w-4 h-4 text-muted-foreground" />
+                                <span className="font-medium">{entry.folderName}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="max-w-xs">
+                              <div className="truncate" title={entry.taskName}>
+                                {entry.taskName}
+                              </div>
+                              {entry.description && (
+                                <div className="text-xs text-muted-foreground truncate" title={entry.description}>
+                                  {entry.description}
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary" className="font-mono">
+                                {entry.duration.toFixed(2)} hrs
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Users className="w-3 h-3 text-muted-foreground" />
+                                <span className="text-sm">{entry.teamName}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <User className="w-3 h-3 text-muted-foreground" />
+                                {entry.user}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={entry.billable ? "default" : "outline"}>
+                                {entry.billable ? "Billable" : "Non-billable"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {entry.taskId && (
+                                <a
+                                  href={`https://app.clickup.com/t/${entry.taskId}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-muted transition-colors"
+                                  title="Open in ClickUp"
+                                  data-testid={`link-clickup-${entry.id}`}
+                                >
+                                  <ExternalLink className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                                </a>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </>
         )}
       </div>
