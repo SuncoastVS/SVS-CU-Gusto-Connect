@@ -7,10 +7,16 @@ import {
   type InsertMappingRule,
   type SyncLog,
   type InsertSyncLog,
+  type Team,
+  type InsertTeam,
+  type UserTeamMapping,
+  type InsertUserTeamMapping,
   users,
   configurations,
   mappingRules,
   syncLogs,
+  teams,
+  userTeamMappings,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
@@ -30,6 +36,14 @@ export interface IStorage {
   getSyncLogs(limit?: number): Promise<SyncLog[]>;
   createSyncLog(log: InsertSyncLog): Promise<SyncLog>;
   updateSyncLog(id: string, updates: Partial<SyncLog>): Promise<SyncLog>;
+  
+  getTeams(): Promise<Team[]>;
+  createTeam(team: InsertTeam): Promise<Team>;
+  deleteTeam(id: string): Promise<void>;
+  
+  getUserTeamMappings(): Promise<UserTeamMapping[]>;
+  upsertUserTeamMapping(mapping: InsertUserTeamMapping): Promise<UserTeamMapping>;
+  getUserTeamMapping(clickupUserId: number): Promise<UserTeamMapping | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -110,6 +124,53 @@ export class DatabaseStorage implements IStorage {
       .where(eq(syncLogs.id, id))
       .returning();
     return updated;
+  }
+
+  async getTeams(): Promise<Team[]> {
+    return db.select().from(teams).orderBy(teams.name);
+  }
+
+  async createTeam(team: InsertTeam): Promise<Team> {
+    const [created] = await db
+      .insert(teams)
+      .values(team)
+      .returning();
+    return created;
+  }
+
+  async deleteTeam(id: string): Promise<void> {
+    await db.update(userTeamMappings)
+      .set({ teamId: null })
+      .where(eq(userTeamMappings.teamId, id));
+    await db.delete(teams).where(eq(teams.id, id));
+  }
+
+  async getUserTeamMappings(): Promise<UserTeamMapping[]> {
+    return db.select().from(userTeamMappings).orderBy(userTeamMappings.clickupUsername);
+  }
+
+  async upsertUserTeamMapping(mapping: InsertUserTeamMapping): Promise<UserTeamMapping> {
+    const existing = await this.getUserTeamMapping(mapping.clickupUserId);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(userTeamMappings)
+        .set({ ...mapping, updatedAt: new Date() })
+        .where(eq(userTeamMappings.clickupUserId, mapping.clickupUserId))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(userTeamMappings)
+        .values(mapping)
+        .returning();
+      return created;
+    }
+  }
+
+  async getUserTeamMapping(clickupUserId: number): Promise<UserTeamMapping | undefined> {
+    const [mapping] = await db.select().from(userTeamMappings).where(eq(userTeamMappings.clickupUserId, clickupUserId));
+    return mapping || undefined;
   }
 }
 

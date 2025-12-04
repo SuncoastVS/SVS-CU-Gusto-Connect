@@ -4,6 +4,8 @@ import { storage } from "./storage";
 import { 
   insertConfigurationSchema, 
   insertMappingRuleSchema,
+  insertTeamSchema,
+  insertUserTeamMappingSchema,
 } from "@shared/schema";
 import { z } from "zod";
 import { ClickUpService, matchTaskToRule, convertMillisecondsToHours } from "./services/clickup";
@@ -87,6 +89,87 @@ export async function registerRoutes(
     }
   });
 
+  // Teams endpoints
+  app.get("/api/teams", async (req, res) => {
+    try {
+      const teamsList = await storage.getTeams();
+      res.json(teamsList);
+    } catch (error) {
+      console.error("Error fetching teams:", error);
+      res.status(500).json({ error: "Failed to fetch teams" });
+    }
+  });
+
+  app.post("/api/teams", async (req, res) => {
+    try {
+      const validated = insertTeamSchema.parse(req.body);
+      const team = await storage.createTeam(validated);
+      res.json(team);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        console.error("Error creating team:", error);
+        res.status(500).json({ error: "Failed to create team" });
+      }
+    }
+  });
+
+  app.delete("/api/teams/:id", async (req, res) => {
+    try {
+      await storage.deleteTeam(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting team:", error);
+      res.status(500).json({ error: "Failed to delete team" });
+    }
+  });
+
+  // User-Team mapping endpoints
+  app.get("/api/user-team-mappings", async (req, res) => {
+    try {
+      const mappings = await storage.getUserTeamMappings();
+      res.json(mappings);
+    } catch (error) {
+      console.error("Error fetching user-team mappings:", error);
+      res.status(500).json({ error: "Failed to fetch user-team mappings" });
+    }
+  });
+
+  app.post("/api/user-team-mappings", async (req, res) => {
+    try {
+      const validated = insertUserTeamMappingSchema.parse(req.body);
+      const mapping = await storage.upsertUserTeamMapping(validated);
+      res.json(mapping);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: error.errors });
+      } else {
+        console.error("Error updating user-team mapping:", error);
+        res.status(500).json({ error: "Failed to update user-team mapping" });
+      }
+    }
+  });
+
+  // Get ClickUp users for mapping
+  app.get("/api/clickup/users", async (req, res) => {
+    try {
+      const config = await storage.getConfiguration();
+      
+      if (!config?.clickupApiKey || !config?.clickupTeamId) {
+        return res.status(400).json({ error: "ClickUp not fully configured" });
+      }
+
+      const clickup = new ClickUpService(config.clickupApiKey);
+      const members = await clickup.getTeamMembers(config.clickupTeamId);
+      
+      res.json(members);
+    } catch (error) {
+      console.error("Failed to fetch ClickUp users:", error);
+      res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+
   // ClickUp API endpoints
   app.post("/api/clickup/test", async (req, res) => {
     try {
@@ -146,10 +229,23 @@ export async function registerRoutes(
         endDate,
       });
 
+      const userMappings = await storage.getUserTeamMappings();
+      const teamsList = await storage.getTeams();
+      
+      const userTeamMap = new Map<number, string>();
+      for (const mapping of userMappings) {
+        if (mapping.teamId) {
+          const team = teamsList.find(t => t.id === mapping.teamId);
+          if (team) {
+            userTeamMap.set(mapping.clickupUserId, team.name);
+          }
+        }
+      }
+
       const formattedEntries = entries.map(entry => ({
         id: entry.id,
         folderName: entry.folderName,
-        teamName: entry.teamName,
+        teamName: entry.user?.id ? (userTeamMap.get(entry.user.id) || "No Team") : "No Team",
         taskName: entry.task?.name || "No task",
         taskId: entry.task?.id,
         user: entry.user?.username || "Unknown",

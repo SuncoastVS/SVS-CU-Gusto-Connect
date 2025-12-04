@@ -7,11 +7,32 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchConfiguration, updateConfiguration, testClickUpConnection, type ClickUpTeam } from "@/lib/api";
+import { 
+  fetchConfiguration, 
+  updateConfiguration, 
+  testClickUpConnection,
+  fetchTeams,
+  createTeam,
+  deleteTeam,
+  fetchClickUpUsers,
+  fetchUserTeamMappings,
+  updateUserTeamMapping,
+  type ClickUpTeam,
+  type ClickUpUser,
+} from "@/lib/api";
+import type { Team, UserTeamMapping } from "@shared/schema";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, Loader2, AlertCircle } from "lucide-react";
+import { CheckCircle2, Loader2, AlertCircle, Plus, Trash2, Users } from "lucide-react";
 
 export default function Settings() {
   const queryClient = useQueryClient();
@@ -32,6 +53,23 @@ export default function Settings() {
 
   const [clickupTeams, setClickupTeams] = useState<ClickUpTeam[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
+  const [newTeamName, setNewTeamName] = useState("");
+
+  const { data: teams = [] } = useQuery({
+    queryKey: ["teams"],
+    queryFn: fetchTeams,
+  });
+
+  const { data: clickupUsers = [] } = useQuery({
+    queryKey: ["clickup-users"],
+    queryFn: fetchClickUpUsers,
+    enabled: !!config?.clickupApiKey && !!config?.clickupTeamId,
+  });
+
+  const { data: userMappings = [] } = useQuery({
+    queryKey: ["user-team-mappings"],
+    queryFn: fetchUserTeamMappings,
+  });
 
   useEffect(() => {
     if (config) {
@@ -82,6 +120,42 @@ export default function Settings() {
     },
   });
 
+  const createTeamMutation = useMutation({
+    mutationFn: createTeam,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["teams"] });
+      setNewTeamName("");
+      toast.success("Team created");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const deleteTeamMutation = useMutation({
+    mutationFn: deleteTeam,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["teams"] });
+      queryClient.invalidateQueries({ queryKey: ["user-team-mappings"] });
+      toast.success("Team deleted");
+    },
+    onError: () => {
+      toast.error("Failed to delete team");
+    },
+  });
+
+  const updateMappingMutation = useMutation({
+    mutationFn: ({ clickupUserId, clickupUsername, teamId }: { clickupUserId: number; clickupUsername: string; teamId: string | null }) =>
+      updateUserTeamMapping(clickupUserId, clickupUsername, teamId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-team-mappings"] });
+      toast.success("User assigned to team");
+    },
+    onError: () => {
+      toast.error("Failed to assign user to team");
+    },
+  });
+
   const handleSave = () => {
     updateMutation.mutate(formData);
   };
@@ -91,17 +165,37 @@ export default function Settings() {
     testConnectionMutation.mutate();
   };
 
+  const handleAddTeam = () => {
+    if (newTeamName.trim()) {
+      createTeamMutation.mutate(newTeamName.trim());
+    }
+  };
+
+  const getUserTeamId = (clickupUserId: number): string | null => {
+    const mapping = userMappings.find(m => m.clickupUserId === clickupUserId);
+    return mapping?.teamId || null;
+  };
+
+  const handleUserTeamChange = (user: ClickUpUser, teamId: string) => {
+    updateMappingMutation.mutate({
+      clickupUserId: user.id,
+      clickupUsername: user.username,
+      teamId: teamId === "none" ? null : teamId,
+    });
+  };
+
   return (
     <Layout>
       <div className="space-y-8">
         <div>
           <h1 className="text-2xl font-bold tracking-tight" data-testid="heading-settings">Settings</h1>
-          <p className="text-muted-foreground mt-1">Manage your integrations and sync preferences.</p>
+          <p className="text-muted-foreground mt-1">Manage your integrations, teams, and sync preferences.</p>
         </div>
 
         <Tabs defaultValue="integrations" className="w-full">
           <TabsList className="mb-6">
             <TabsTrigger value="integrations" data-testid="tab-integrations">Integrations</TabsTrigger>
+            <TabsTrigger value="teams" data-testid="tab-teams">Team Management</TabsTrigger>
             <TabsTrigger value="schedule" data-testid="tab-schedule">Schedule</TabsTrigger>
           </TabsList>
           
@@ -246,6 +340,118 @@ export default function Settings() {
                   {updateMutation.isPending ? "Saving..." : "Save"}
                 </Button>
               </CardFooter>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="teams" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  Teams
+                </CardTitle>
+                <CardDescription>Create teams and assign ClickUp users to them.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Enter team name..."
+                    value={newTeamName}
+                    onChange={(e) => setNewTeamName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleAddTeam()}
+                    data-testid="input-new-team"
+                  />
+                  <Button 
+                    onClick={handleAddTeam}
+                    disabled={!newTeamName.trim() || createTeamMutation.isPending}
+                    data-testid="button-add-team"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Team
+                  </Button>
+                </div>
+
+                {teams.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-2">
+                    {teams.map((team) => (
+                      <Badge 
+                        key={team.id} 
+                        variant="secondary"
+                        className="text-sm py-1 px-3 flex items-center gap-2"
+                      >
+                        {team.name}
+                        <button
+                          onClick={() => deleteTeamMutation.mutate(team.id)}
+                          className="hover:text-destructive transition-colors"
+                          data-testid={`button-delete-team-${team.id}`}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>User Assignments</CardTitle>
+                <CardDescription>
+                  Assign each ClickUp user to a team. These assignments will appear in the Time Entries table.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                {!config?.clickupApiKey || !config?.clickupTeamId ? (
+                  <div className="text-center py-12">
+                    <AlertCircle className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-muted-foreground">
+                      Configure ClickUp in the Integrations tab first to see users.
+                    </p>
+                  </div>
+                ) : clickupUsers.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Loader2 className="w-8 h-8 text-muted-foreground mx-auto mb-2 animate-spin" />
+                    <p className="text-muted-foreground">Loading users from ClickUp...</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>ClickUp User</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead className="w-[200px]">Assigned Team</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {clickupUsers.map((user) => (
+                        <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
+                          <TableCell className="font-medium">{user.username}</TableCell>
+                          <TableCell className="text-muted-foreground">{user.email}</TableCell>
+                          <TableCell>
+                            <Select
+                              value={getUserTeamId(user.id) || "none"}
+                              onValueChange={(value) => handleUserTeamChange(user, value)}
+                            >
+                              <SelectTrigger data-testid={`select-team-${user.id}`}>
+                                <SelectValue placeholder="Select team..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">No Team</SelectItem>
+                                {teams.map((team) => (
+                                  <SelectItem key={team.id} value={team.id}>
+                                    {team.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
             </Card>
           </TabsContent>
 
