@@ -66,6 +66,27 @@ export class ClickUpService {
     return response.teams;
   }
 
+  async getTeamMembers(teamId: string): Promise<{ id: number; username: string; email: string }[]> {
+    const response = await this.request<ClickUpTeamsResponse>("/team");
+    const team = response.teams.find(t => t.id === teamId);
+    if (!team) return [];
+    
+    // Extract member user IDs from the team
+    const members: { id: number; username: string; email: string }[] = [];
+    if ((team as any).members) {
+      for (const member of (team as any).members) {
+        if (member.user) {
+          members.push({
+            id: member.user.id,
+            username: member.user.username,
+            email: member.user.email || "",
+          });
+        }
+      }
+    }
+    return members;
+  }
+
   async getTimeEntries(
     teamId: string,
     options: {
@@ -82,15 +103,36 @@ export class ClickUpService {
     if (options.endDate) {
       params.append("end_date", options.endDate.getTime().toString());
     }
+
+    // If no specific assignee, fetch for all team members
     if (options.assignee) {
       params.append("assignee", options.assignee);
+      const queryString = params.toString();
+      const endpoint = `/team/${teamId}/time_entries${queryString ? `?${queryString}` : ""}`;
+      const response = await this.request<ClickUpTimeEntriesResponse>(endpoint);
+      return response.data || [];
     }
 
-    const queryString = params.toString();
-    const endpoint = `/team/${teamId}/time_entries${queryString ? `?${queryString}` : ""}`;
+    // Fetch team members and get time entries for each
+    const members = await this.getTeamMembers(teamId);
+    const allEntries: ClickUpTimeEntry[] = [];
     
-    const response = await this.request<ClickUpTimeEntriesResponse>(endpoint);
-    return response.data || [];
+    for (const member of members) {
+      try {
+        const memberParams = new URLSearchParams(params);
+        memberParams.append("assignee", member.id.toString());
+        const queryString = memberParams.toString();
+        const endpoint = `/team/${teamId}/time_entries${queryString ? `?${queryString}` : ""}`;
+        const response = await this.request<ClickUpTimeEntriesResponse>(endpoint);
+        if (response.data) {
+          allEntries.push(...response.data);
+        }
+      } catch (error) {
+        console.log(`Could not fetch time entries for ${member.username}: ${error}`);
+      }
+    }
+    
+    return allEntries;
   }
 
   async testConnection(): Promise<{ success: boolean; teams: ClickUpTeam[] }> {
