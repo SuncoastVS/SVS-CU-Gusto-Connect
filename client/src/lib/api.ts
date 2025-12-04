@@ -1,4 +1,4 @@
-import type { Configuration, MappingRule, SyncLog } from "@shared/schema";
+import type { Configuration, SyncLog } from "@shared/schema";
 
 const API_BASE = "/api";
 
@@ -19,28 +19,6 @@ export async function updateConfiguration(config: Partial<Configuration>): Promi
   return res.json();
 }
 
-export async function fetchMappingRules(): Promise<MappingRule[]> {
-  const res = await fetch(`${API_BASE}/mapping-rules`);
-  if (!res.ok) throw new Error("Failed to fetch mapping rules");
-  return res.json();
-}
-
-export async function createMappingRule(rule: Omit<MappingRule, "id" | "createdAt">): Promise<MappingRule> {
-  const res = await fetch(`${API_BASE}/mapping-rules`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(rule),
-  });
-  if (!res.ok) throw new Error("Failed to create mapping rule");
-  return res.json();
-}
-
-export async function deleteMappingRule(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/mapping-rules/${id}`, {
-    method: "DELETE",
-  });
-  if (!res.ok) throw new Error("Failed to delete mapping rule");
-}
 
 export async function fetchSyncLogs(limit?: number): Promise<SyncLog[]> {
   const url = limit ? `${API_BASE}/sync-logs?limit=${limit}` : `${API_BASE}/sync-logs`;

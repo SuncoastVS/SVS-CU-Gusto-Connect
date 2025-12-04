@@ -150,13 +150,13 @@ export async function registerRoutes(
         id: entry.id,
         taskName: entry.task?.name || "No task",
         taskId: entry.task?.id,
-        user: entry.user.username,
-        email: entry.user.email,
+        user: entry.user?.username || "Unknown",
+        email: entry.user?.email || "N/A",
         duration: convertMillisecondsToHours(entry.duration),
-        description: entry.description,
+        description: entry.description || "",
         start: entry.start,
         end: entry.end,
-        billable: entry.billable,
+        billable: entry.billable ?? false,
       }));
 
       res.json(formattedEntries);

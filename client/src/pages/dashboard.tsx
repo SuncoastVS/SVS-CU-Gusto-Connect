@@ -9,10 +9,9 @@ import {
   Clock, 
   AlertCircle, 
   RefreshCw,
-  Settings,
-  ArrowRightLeft
+  Settings
 } from "lucide-react";
-import { fetchConfiguration, fetchMappingRules, fetchSyncLogs, runSync } from "@/lib/api";
+import { fetchConfiguration, fetchSyncLogs, runSync } from "@/lib/api";
 import { toast } from "sonner";
 import { Link } from "wouter";
 
@@ -22,11 +21,6 @@ export default function Dashboard() {
   const { data: config } = useQuery({
     queryKey: ["configuration"],
     queryFn: fetchConfiguration,
-  });
-
-  const { data: rules = [] } = useQuery({
-    queryKey: ["mapping-rules"],
-    queryFn: fetchMappingRules,
   });
 
   const { data: logs = [] } = useQuery({
@@ -48,7 +42,7 @@ export default function Dashboard() {
   });
 
   const latestLog = logs[0];
-  const hasCredentials = config?.clickupApiKey && config?.gustoAccessToken;
+  const isConfigured = config?.clickupApiKey && config?.clickupTeamId;
 
   return (
     <Layout>
@@ -68,7 +62,7 @@ export default function Dashboard() {
             <Button 
               className="gap-2" 
               onClick={() => syncMutation.mutate()}
-              disabled={!hasCredentials || syncMutation.isPending}
+              disabled={!isConfigured || syncMutation.isPending}
               data-testid="button-sync-now"
             >
               <RefreshCw className={`w-4 h-4 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
@@ -77,7 +71,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2">
           <Card data-testid="card-next-run">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Next Scheduled Run</CardTitle>
@@ -111,19 +105,6 @@ export default function Dashboard() {
               </p>
             </CardContent>
           </Card>
-
-          <Card data-testid="card-mappings">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Mappings</CardTitle>
-              <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold" data-testid="text-rule-count">{rules.length} Rules</div>
-              <p className="text-xs text-muted-foreground">
-                {rules.length === 0 ? "Add mapping rules to begin" : "Matching QuickBooks Jobs"}
-              </p>
-            </CardContent>
-          </Card>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
@@ -136,7 +117,7 @@ export default function Dashboard() {
               <div className="flex items-center justify-between p-4 border rounded-lg bg-card" data-testid="connection-clickup">
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 rounded-full bg-[#7b68ee]/10 flex items-center justify-center">
-                    <span className="font-bold text-[#7b68ee] text-xs">C</span>
+                    <span className="font-bold text-[#7b68ee] text-xs">CU</span>
                   </div>
                   <div>
                     <div className="font-medium">ClickUp</div>
@@ -176,29 +157,6 @@ export default function Dashboard() {
                   data-testid="badge-gusto-status"
                 >
                   {config?.gustoAccessToken ? "Active" : "Pending"}
-                </Badge>
-              </div>
-
-              <div className="flex items-center justify-between p-4 border rounded-lg bg-card" data-testid="connection-quickbooks">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-[#2ca01c]/10 flex items-center justify-center">
-                    <span className="font-bold text-[#2ca01c] text-xs">QB</span>
-                  </div>
-                  <div>
-                    <div className="font-medium">QuickBooks</div>
-                    <div className="text-xs text-muted-foreground">
-                      {config?.quickbooksConnected ? "Connected for Job Codes" : "Not configured"}
-                    </div>
-                  </div>
-                </div>
-                <Badge 
-                  variant="outline" 
-                  className={config?.quickbooksConnected 
-                    ? "bg-green-50 text-green-700 border-green-200" 
-                    : "bg-amber-50 text-amber-700 border-amber-200"}
-                  data-testid="badge-quickbooks-status"
-                >
-                  {config?.quickbooksConnected ? "Active" : "Pending"}
                 </Badge>
               </div>
             </CardContent>

@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchConfiguration, updateConfiguration, testClickUpConnection, fetchClickUpTeams, type ClickUpTeam } from "@/lib/api";
+import { fetchConfiguration, updateConfiguration, testClickUpConnection, type ClickUpTeam } from "@/lib/api";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { CheckCircle2, Loader2, AlertCircle } from "lucide-react";
@@ -25,7 +25,6 @@ export default function Settings() {
     clickupTeamId: "",
     gustoAccessToken: "",
     gustoCompanyId: "",
-    quickbooksConnected: false,
     syncEnabled: true,
     syncFrequency: "daily",
     syncTime: "00:00",
@@ -41,7 +40,6 @@ export default function Settings() {
         clickupTeamId: config.clickupTeamId || "",
         gustoAccessToken: config.gustoAccessToken || "",
         gustoCompanyId: config.gustoCompanyId || "",
-        quickbooksConnected: config.quickbooksConnected || false,
         syncEnabled: config.syncEnabled ?? true,
         syncFrequency: config.syncFrequency || "daily",
         syncTime: config.syncTime || "00:00",
@@ -166,7 +164,7 @@ export default function Settings() {
                   </div>
                 )}
 
-                {!clickupTeams.length && formData.clickupTeamId && (
+                {!clickupTeams.length && (
                   <div className="grid gap-2">
                     <Label htmlFor="clickupTeamId">Team ID</Label>
                     <Input
@@ -176,6 +174,9 @@ export default function Settings() {
                       onChange={(e) => setFormData({ ...formData, clickupTeamId: e.target.value })}
                       data-testid="input-clickup-team-id"
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Enter your Team ID, or test the connection to auto-discover workspaces
+                    </p>
                   </div>
                 )}
               </CardContent>
@@ -208,7 +209,7 @@ export default function Settings() {
             <Card>
               <CardHeader>
                 <CardTitle>Gusto Configuration</CardTitle>
-                <CardDescription>Connect to Gusto to push payroll hours.</CardDescription>
+                <CardDescription>Connect to Gusto to push payroll hours (coming soon).</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-2">
@@ -245,26 +246,6 @@ export default function Settings() {
                   {updateMutation.isPending ? "Saving..." : "Save"}
                 </Button>
               </CardFooter>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>QuickBooks Configuration</CardTitle>
-                <CardDescription>Connect to QuickBooks for job code mapping.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>QuickBooks Connection</Label>
-                    <p className="text-sm text-muted-foreground">Enable QuickBooks job mapping</p>
-                  </div>
-                  <Switch 
-                    checked={formData.quickbooksConnected}
-                    onCheckedChange={(checked) => setFormData({ ...formData, quickbooksConnected: checked })}
-                    data-testid="switch-quickbooks"
-                  />
-                </div>
-              </CardContent>
             </Card>
           </TabsContent>
 

@@ -3,7 +3,7 @@ import {
   LayoutDashboard, 
   Settings, 
   Activity, 
-  ArrowRightLeft,
+  Clock,
   LogOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -13,7 +13,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const navItems = [
     { href: "/", icon: LayoutDashboard, label: "Dashboard" },
-    { href: "/mapping", icon: ArrowRightLeft, label: "Mapping Rules" },
+    { href: "/time-entries", icon: Clock, label: "Time Entries" },
     { href: "/logs", icon: Activity, label: "Sync History" },
     { href: "/settings", icon: Settings, label: "Settings" },
   ];
