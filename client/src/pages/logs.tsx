@@ -1,7 +1,6 @@
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -10,85 +9,91 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CheckCircle2, XCircle, AlertTriangle, Calendar, Clock, ArrowRight } from "lucide-react";
-
-const MOCK_LOGS = [
-  { id: "sync_123", date: "2024-03-20 12:00 AM", status: "Success", records: 24, duration: "45s" },
-  { id: "sync_122", date: "2024-03-18 12:00 AM", status: "Success", records: 18, duration: "32s" },
-  { id: "sync_121", date: "2024-03-16 12:00 AM", status: "Warning", records: 15, duration: "28s", message: "3 tasks skipped (no match)" },
-  { id: "sync_120", date: "2024-03-14 12:00 AM", status: "Success", records: 22, duration: "41s" },
-  { id: "sync_119", date: "2024-03-12 12:00 AM", status: "Failed", records: 0, duration: "5s", message: "ClickUp API Rate Limit" },
-];
+import { CheckCircle2, XCircle, AlertTriangle, Calendar, Clock } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { fetchSyncLogs } from "@/lib/api";
+import { format } from "date-fns";
 
 export default function Logs() {
+  const { data: logs = [] } = useQuery({
+    queryKey: ["sync-logs"],
+    queryFn: () => fetchSyncLogs(),
+  });
+
   return (
     <Layout>
       <div className="space-y-8">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Sync History</h1>
+          <h1 className="text-2xl font-bold tracking-tight" data-testid="heading-logs">Sync History</h1>
           <p className="text-muted-foreground mt-1">Audit log of all synchronization jobs.</p>
         </div>
 
         <Card>
           <CardHeader>
              <CardTitle>Job History</CardTitle>
-             <CardDescription>Showing last 30 days</CardDescription>
+             <CardDescription>Showing all sync jobs</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Date & Time</TableHead>
-                  <TableHead>Records Processed</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead className="text-right">Details</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {MOCK_LOGS.map((log) => (
-                  <TableRow key={log.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {log.status === "Success" && <CheckCircle2 className="w-4 h-4 text-green-500" />}
-                        {log.status === "Warning" && <AlertTriangle className="w-4 h-4 text-amber-500" />}
-                        {log.status === "Failed" && <XCircle className="w-4 h-4 text-destructive" />}
-                        <span className={
-                          log.status === "Success" ? "text-green-700 font-medium" :
-                          log.status === "Warning" ? "text-amber-700 font-medium" :
-                          "text-destructive font-medium"
-                        }>
-                          {log.status}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-3 h-3" />
-                        {log.date}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">
-                        {log.records} Entries
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground font-mono text-xs">
-                      {log.duration}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {log.message ? (
-                        <span className="text-xs text-muted-foreground italic mr-4">{log.message}</span>
-                      ) : null}
-                      <Button variant="ghost" size="sm">
-                        View
-                        <ArrowRight className="w-3 h-3 ml-1" />
-                      </Button>
-                    </TableCell>
+            {logs.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground" data-testid="text-no-logs">
+                  No sync history yet. Run your first sync from the dashboard.
+                </p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Date & Time</TableHead>
+                    <TableHead>Records Processed</TableHead>
+                    <TableHead>Duration</TableHead>
+                    <TableHead className="text-right">Message</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {logs.map((log) => (
+                    <TableRow key={log.id} data-testid={`log-row-${log.id}`}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {log.status === "success" && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                          {log.status === "warning" && <AlertTriangle className="w-4 h-4 text-amber-500" />}
+                          {log.status === "failed" && <XCircle className="w-4 h-4 text-destructive" />}
+                          {log.status === "running" && <Clock className="w-4 h-4 text-blue-500 animate-spin" />}
+                          <span className={
+                            log.status === "success" ? "text-green-700 font-medium" :
+                            log.status === "warning" ? "text-amber-700 font-medium" :
+                            log.status === "failed" ? "text-destructive font-medium" :
+                            "text-blue-700 font-medium"
+                          }>
+                            {log.status.charAt(0).toUpperCase() + log.status.slice(1)}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-3 h-3" />
+                          {format(new Date(log.startedAt || new Date()), "MMM d, yyyy h:mm a")}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">
+                          {log.recordsProcessed || 0} Entries
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground font-mono text-xs">
+                        {log.duration || "-"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {log.message ? (
+                          <span className="text-xs text-muted-foreground italic">{log.message}</span>
+                        ) : null}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>
