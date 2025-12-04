@@ -6,6 +6,7 @@ import {
   insertMappingRuleSchema,
 } from "@shared/schema";
 import { z } from "zod";
+import { ClickUpService, matchTaskToRule, convertMillisecondsToHours } from "./services/clickup";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -86,14 +87,99 @@ export async function registerRoutes(
     }
   });
 
+  // ClickUp API endpoints
+  app.post("/api/clickup/test", async (req, res) => {
+    try {
+      const config = await storage.getConfiguration();
+      
+      if (!config?.clickupApiKey) {
+        return res.status(400).json({ error: "ClickUp API key not configured" });
+      }
+
+      const clickup = new ClickUpService(config.clickupApiKey);
+      const result = await clickup.testConnection();
+      
+      res.json(result);
+    } catch (error) {
+      console.error("ClickUp test failed:", error);
+      res.status(500).json({ 
+        success: false, 
+        error: error instanceof Error ? error.message : "Connection test failed" 
+      });
+    }
+  });
+
+  app.get("/api/clickup/teams", async (req, res) => {
+    try {
+      const config = await storage.getConfiguration();
+      
+      if (!config?.clickupApiKey) {
+        return res.status(400).json({ error: "ClickUp API key not configured" });
+      }
+
+      const clickup = new ClickUpService(config.clickupApiKey);
+      const teams = await clickup.getTeams();
+      
+      res.json(teams);
+    } catch (error) {
+      console.error("Failed to fetch ClickUp teams:", error);
+      res.status(500).json({ error: "Failed to fetch teams" });
+    }
+  });
+
+  app.get("/api/clickup/time-entries", async (req, res) => {
+    try {
+      const config = await storage.getConfiguration();
+      
+      if (!config?.clickupApiKey || !config?.clickupTeamId) {
+        return res.status(400).json({ error: "ClickUp not fully configured" });
+      }
+
+      const clickup = new ClickUpService(config.clickupApiKey);
+      
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 7);
+
+      const entries = await clickup.getTimeEntries(config.clickupTeamId, {
+        startDate,
+        endDate,
+      });
+
+      const formattedEntries = entries.map(entry => ({
+        id: entry.id,
+        taskName: entry.task?.name || "No task",
+        taskId: entry.task?.id,
+        user: entry.user.username,
+        email: entry.user.email,
+        duration: convertMillisecondsToHours(entry.duration),
+        description: entry.description,
+        start: entry.start,
+        end: entry.end,
+        billable: entry.billable,
+      }));
+
+      res.json(formattedEntries);
+    } catch (error) {
+      console.error("Failed to fetch time entries:", error);
+      res.status(500).json({ error: "Failed to fetch time entries" });
+    }
+  });
+
   // Sync execution endpoint
   app.post("/api/sync/run", async (req, res) => {
     try {
       const config = await storage.getConfiguration();
       
-      if (!config?.clickupApiKey || !config?.gustoAccessToken) {
+      if (!config?.clickupApiKey) {
         return res.status(400).json({ 
-          error: "Missing API credentials. Please configure ClickUp and Gusto connections." 
+          error: "ClickUp API key not configured. Go to Settings to add it." 
+        });
+      }
+
+      if (!config?.clickupTeamId) {
+        return res.status(400).json({ 
+          error: "ClickUp Team ID not configured. Go to Settings to add it." 
         });
       }
 
@@ -108,23 +194,74 @@ export async function registerRoutes(
       });
 
       setImmediate(async () => {
+        const startTime = Date.now();
         try {
-          const startTime = Date.now();
+          const clickup = new ClickUpService(config.clickupApiKey!);
           const rules = await storage.getMappingRules();
           
-          const mockRecordsProcessed = Math.floor(Math.random() * 30) + 10;
+          const endDate = new Date();
+          const startDate = new Date();
+          startDate.setDate(startDate.getDate() - 3);
+
+          console.log(`Fetching time entries from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+          
+          const entries = await clickup.getTimeEntries(config.clickupTeamId!, {
+            startDate,
+            endDate,
+          });
+
+          console.log(`Found ${entries.length} time entries`);
+
+          const processedEntries: {
+            taskName: string;
+            hours: number;
+            matchedJob: string | null;
+            user: string;
+          }[] = [];
+
+          for (const entry of entries) {
+            const taskName = entry.task?.name || entry.description || "Untitled";
+            const hours = convertMillisecondsToHours(entry.duration);
+            const matchedJob = matchTaskToRule(taskName, rules);
+
+            processedEntries.push({
+              taskName,
+              hours,
+              matchedJob,
+              user: entry.user.username,
+            });
+          }
+
+          const matchedCount = processedEntries.filter(e => e.matchedJob !== null).length;
+          const unmatchedCount = processedEntries.length - matchedCount;
+
           const duration = `${Math.floor((Date.now() - startTime) / 1000)}s`;
           
+          let status = "success";
+          let message = `Processed ${entries.length} entries. ${matchedCount} matched, ${unmatchedCount} unmatched.`;
+          
+          if (unmatchedCount > 0 && matchedCount > 0) {
+            status = "warning";
+            message = `${unmatchedCount} entries had no matching rules`;
+          } else if (entries.length === 0) {
+            message = "No time entries found in the last 3 days";
+          }
+
           await storage.updateSyncLog(log.id, {
-            status: "success",
-            recordsProcessed: mockRecordsProcessed,
+            status,
+            recordsProcessed: entries.length,
             duration,
+            message,
             completedAt: new Date(),
           });
+
+          console.log("Sync completed:", message);
         } catch (error) {
           console.error("Sync job failed:", error);
+          const duration = `${Math.floor((Date.now() - startTime) / 1000)}s`;
           await storage.updateSyncLog(log.id, {
             status: "failed",
+            duration,
             message: error instanceof Error ? error.message : "Unknown error",
             completedAt: new Date(),
           });

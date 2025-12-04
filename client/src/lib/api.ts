@@ -59,3 +59,50 @@ export async function runSync(): Promise<{ message: string; logId: string }> {
   }
   return res.json();
 }
+
+export interface ClickUpTeam {
+  id: string;
+  name: string;
+}
+
+export interface ClickUpTimeEntry {
+  id: string;
+  taskName: string;
+  taskId?: string;
+  user: string;
+  email: string;
+  duration: number;
+  description: string;
+  start: string;
+  end: string;
+  billable: boolean;
+}
+
+export async function testClickUpConnection(): Promise<{ success: boolean; teams: ClickUpTeam[] }> {
+  const res = await fetch(`${API_BASE}/clickup/test`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || "Connection test failed");
+  }
+  return res.json();
+}
+
+export async function fetchClickUpTeams(): Promise<ClickUpTeam[]> {
+  const res = await fetch(`${API_BASE}/clickup/teams`);
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || "Failed to fetch teams");
+  }
+  return res.json();
+}
+
+export async function fetchClickUpTimeEntries(): Promise<ClickUpTimeEntry[]> {
+  const res = await fetch(`${API_BASE}/clickup/time-entries`);
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || "Failed to fetch time entries");
+  }
+  return res.json();
+}

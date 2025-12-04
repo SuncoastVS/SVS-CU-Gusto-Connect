@@ -6,10 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchConfiguration, updateConfiguration } from "@/lib/api";
+import { fetchConfiguration, updateConfiguration, testClickUpConnection, fetchClickUpTeams, type ClickUpTeam } from "@/lib/api";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { CheckCircle2, Loader2, AlertCircle } from "lucide-react";
 
 export default function Settings() {
   const queryClient = useQueryClient();
@@ -29,6 +31,9 @@ export default function Settings() {
     syncTime: "00:00",
   });
 
+  const [clickupTeams, setClickupTeams] = useState<ClickUpTeam[]>([]);
+  const [connectionStatus, setConnectionStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
+
   useEffect(() => {
     if (config) {
       setFormData({
@@ -37,10 +42,13 @@ export default function Settings() {
         gustoAccessToken: config.gustoAccessToken || "",
         gustoCompanyId: config.gustoCompanyId || "",
         quickbooksConnected: config.quickbooksConnected || false,
-        syncEnabled: config.syncEnabled || true,
+        syncEnabled: config.syncEnabled ?? true,
         syncFrequency: config.syncFrequency || "daily",
         syncTime: config.syncTime || "00:00",
       });
+      if (config.clickupApiKey) {
+        setConnectionStatus("success");
+      }
     }
   }, [config]);
 
@@ -55,8 +63,34 @@ export default function Settings() {
     },
   });
 
+  const testConnectionMutation = useMutation({
+    mutationFn: testClickUpConnection,
+    onMutate: () => {
+      setConnectionStatus("testing");
+    },
+    onSuccess: (result) => {
+      if (result.success) {
+        setConnectionStatus("success");
+        setClickupTeams(result.teams);
+        toast.success(`Connected! Found ${result.teams.length} workspace(s).`);
+      } else {
+        setConnectionStatus("error");
+        toast.error("Connection failed");
+      }
+    },
+    onError: (error: Error) => {
+      setConnectionStatus("error");
+      toast.error(error.message);
+    },
+  });
+
   const handleSave = () => {
     updateMutation.mutate(formData);
+  };
+
+  const handleTestConnection = async () => {
+    await updateMutation.mutateAsync(formData);
+    testConnectionMutation.mutate();
   };
 
   return (
@@ -76,8 +110,24 @@ export default function Settings() {
           <TabsContent value="integrations" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>ClickUp Configuration</CardTitle>
-                <CardDescription>Manage your connection to ClickUp.</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>ClickUp Configuration</CardTitle>
+                    <CardDescription>Connect to ClickUp to pull time tracking data.</CardDescription>
+                  </div>
+                  {connectionStatus === "success" && (
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Connected
+                    </Badge>
+                  )}
+                  {connectionStatus === "error" && (
+                    <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      Error
+                    </Badge>
+                  )}
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-2">
@@ -91,26 +141,74 @@ export default function Settings() {
                     data-testid="input-clickup-key"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Get your API key from ClickUp Settings → Apps
+                    Get your API key from ClickUp Settings → Apps → API Token
                   </p>
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="clickupTeam">Team ID</Label>
-                  <Input
-                    id="clickupTeam"
-                    placeholder="123456"
-                    value={formData.clickupTeamId}
-                    onChange={(e) => setFormData({ ...formData, clickupTeamId: e.target.value })}
-                    data-testid="input-clickup-team"
-                  />
-                </div>
+
+                {clickupTeams.length > 0 && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="clickupTeam">Workspace</Label>
+                    <Select 
+                      value={formData.clickupTeamId}
+                      onValueChange={(value) => setFormData({ ...formData, clickupTeamId: value })}
+                    >
+                      <SelectTrigger data-testid="select-clickup-team">
+                        <SelectValue placeholder="Select a workspace" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clickupTeams.map((team) => (
+                          <SelectItem key={team.id} value={team.id}>
+                            {team.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {!clickupTeams.length && formData.clickupTeamId && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="clickupTeamId">Team ID</Label>
+                    <Input
+                      id="clickupTeamId"
+                      placeholder="123456"
+                      value={formData.clickupTeamId}
+                      onChange={(e) => setFormData({ ...formData, clickupTeamId: e.target.value })}
+                      data-testid="input-clickup-team-id"
+                    />
+                  </div>
+                )}
               </CardContent>
+              <CardFooter className="bg-muted/50 border-t px-6 py-4 flex justify-between">
+                <Button 
+                  variant="outline"
+                  onClick={handleTestConnection}
+                  disabled={!formData.clickupApiKey || testConnectionMutation.isPending || updateMutation.isPending}
+                  data-testid="button-test-clickup"
+                >
+                  {testConnectionMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Testing...
+                    </>
+                  ) : (
+                    "Test Connection"
+                  )}
+                </Button>
+                <Button 
+                  onClick={handleSave}
+                  disabled={updateMutation.isPending}
+                  data-testid="button-save-clickup"
+                >
+                  {updateMutation.isPending ? "Saving..." : "Save"}
+                </Button>
+              </CardFooter>
             </Card>
 
             <Card>
               <CardHeader>
                 <CardTitle>Gusto Configuration</CardTitle>
-                <CardDescription>Manage your connection to Gusto Payroll.</CardDescription>
+                <CardDescription>Connect to Gusto to push payroll hours.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-2">
@@ -138,6 +236,15 @@ export default function Settings() {
                   />
                 </div>
               </CardContent>
+              <CardFooter className="bg-muted/50 border-t px-6 py-4 flex justify-end">
+                <Button 
+                  onClick={handleSave}
+                  disabled={updateMutation.isPending}
+                  data-testid="button-save-gusto"
+                >
+                  {updateMutation.isPending ? "Saving..." : "Save"}
+                </Button>
+              </CardFooter>
             </Card>
 
             <Card>
@@ -159,16 +266,6 @@ export default function Settings() {
                 </div>
               </CardContent>
             </Card>
-
-            <div className="flex justify-end">
-              <Button 
-                onClick={handleSave}
-                disabled={updateMutation.isPending}
-                data-testid="button-save-integrations"
-              >
-                {updateMutation.isPending ? "Saving..." : "Save Changes"}
-              </Button>
-            </div>
           </TabsContent>
 
           <TabsContent value="schedule">
