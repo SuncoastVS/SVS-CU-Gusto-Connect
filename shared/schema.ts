@@ -73,3 +73,35 @@ export const insertSyncLogSchema = createInsertSchema(syncLogs).omit({
 
 export type InsertSyncLog = z.infer<typeof insertSyncLogSchema>;
 export type SyncLog = typeof syncLogs.$inferSelect;
+
+export const teams = pgTable("teams", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertTeamSchema = createInsertSchema(teams).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertTeam = z.infer<typeof insertTeamSchema>;
+export type Team = typeof teams.$inferSelect;
+
+export const userTeamMappings = pgTable("user_team_mappings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clickupUserId: integer("clickup_user_id").notNull().unique(),
+  clickupUsername: text("clickup_username").notNull(),
+  teamId: varchar("team_id").references(() => teams.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertUserTeamMappingSchema = createInsertSchema(userTeamMappings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertUserTeamMapping = z.infer<typeof insertUserTeamMappingSchema>;
+export type UserTeamMapping = typeof userTeamMappings.$inferSelect;
