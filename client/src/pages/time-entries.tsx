@@ -269,6 +269,18 @@ export default function TimeEntries() {
                       </ToggleGroupItem>
                     </ToggleGroup>
 
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setDateMode("biweekly");
+                        setSelectedPeriod(getCurrentPeriodValue());
+                      }}
+                      data-testid="button-today"
+                    >
+                      Today
+                    </Button>
+
                     {dateMode === "biweekly" ? (
                       <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
                         <SelectTrigger className="w-[220px]" data-testid="select-biweekly-period">
