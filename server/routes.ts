@@ -228,7 +228,7 @@ export async function registerRoutes(
               taskName,
               hours,
               matchedJob,
-              user: entry.user.username,
+              user: entry.user?.username || "Unknown",
             });
           }
 
