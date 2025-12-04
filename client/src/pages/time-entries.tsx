@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Clock, RefreshCw, AlertCircle, User, Search, FolderOpen, X } from "lucide-react";
+import { Clock, RefreshCw, AlertCircle, User, Search, FolderOpen, X, ExternalLink } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchClickUpTimeEntries, fetchConfiguration } from "@/lib/api";
 import { Link } from "wouter";
@@ -275,6 +275,7 @@ export default function TimeEntries() {
                         <TableHead>Hours</TableHead>
                         <TableHead>User</TableHead>
                         <TableHead>Billable</TableHead>
+                        <TableHead className="w-12"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -311,6 +312,20 @@ export default function TimeEntries() {
                             <Badge variant={entry.billable ? "default" : "outline"}>
                               {entry.billable ? "Billable" : "Non-billable"}
                             </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {entry.taskId && (
+                              <a
+                                href={`https://app.clickup.com/t/${entry.taskId}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-muted transition-colors"
+                                title="Open in ClickUp"
+                                data-testid={`link-clickup-${entry.id}`}
+                              >
+                                <ExternalLink className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                              </a>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
