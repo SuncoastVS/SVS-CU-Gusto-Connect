@@ -4,6 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Table,
   TableBody,
@@ -12,17 +15,77 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Clock, RefreshCw, AlertCircle, User, Search, FolderOpen, X, ExternalLink, Users } from "lucide-react";
+import { Clock, RefreshCw, AlertCircle, User, Search, FolderOpen, X, ExternalLink, Users, CalendarDays, CalendarRange } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchClickUpTimeEntries, fetchConfiguration } from "@/lib/api";
 import { Link } from "wouter";
 import { useState, useMemo } from "react";
+import { format, startOfMonth, endOfMonth, getDaysInMonth, isWithinInterval, parseISO } from "date-fns";
+import type { DateRange } from "react-day-picker";
+
+interface BiweeklyPeriod {
+  label: string;
+  start: Date;
+  end: Date;
+  value: string;
+}
+
+function generateBiweeklyPeriods(year: number): BiweeklyPeriod[] {
+  const periods: BiweeklyPeriod[] = [];
+  
+  for (let month = 0; month < 12; month++) {
+    const monthStart = new Date(year, month, 1);
+    const lastDay = getDaysInMonth(monthStart);
+    const monthName = format(monthStart, "MMM");
+    
+    periods.push({
+      label: `${monthName} 1 – ${monthName} 15`,
+      start: new Date(year, month, 1, 0, 0, 0, 0),
+      end: new Date(year, month, 15, 23, 59, 59, 999),
+      value: `${year}-${month}-first`,
+    });
+    
+    periods.push({
+      label: `${monthName} 16 – ${monthName} ${lastDay}`,
+      start: new Date(year, month, 16, 0, 0, 0, 0),
+      end: new Date(year, month, lastDay, 23, 59, 59, 999),
+      value: `${year}-${month}-second`,
+    });
+  }
+  
+  return periods;
+}
+
+function getCurrentPeriodValue(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const day = now.getDate();
+  
+  if (day <= 15) {
+    return `${year}-${month}-first`;
+  } else {
+    return `${year}-${month}-second`;
+  }
+}
+
+function findPeriodByValue(periods: BiweeklyPeriod[], value: string): BiweeklyPeriod | undefined {
+  return periods.find(p => p.value === value);
+}
 
 export default function TimeEntries() {
   const [searchQuery, setSearchQuery] = useState("");
   const [folderFilter, setFolderFilter] = useState<string>("all");
   const [teamFilter, setTeamFilter] = useState<string>("all");
   const [userFilter, setUserFilter] = useState<string>("all");
+  
+  const [dateMode, setDateMode] = useState<"biweekly" | "custom">("biweekly");
+  const [selectedPeriod, setSelectedPeriod] = useState<string>(getCurrentPeriodValue());
+  const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+
+  const currentYear = new Date().getFullYear();
+  const biweeklyPeriods = useMemo(() => generateBiweeklyPeriods(currentYear), [currentYear]);
 
   const { data: config } = useQuery({
     queryKey: ["configuration"],
@@ -38,7 +101,6 @@ export default function TimeEntries() {
 
   const isConfigured = config?.clickupApiKey && config?.clickupTeamId;
 
-  // Get unique folders, teams, and users for filter dropdowns
   const { uniqueFolders, uniqueTeams, uniqueUsers } = useMemo(() => {
     const folders = new Set<string>();
     const teams = new Set<string>();
@@ -57,7 +119,24 @@ export default function TimeEntries() {
     };
   }, [entries]);
 
-  // Filter entries based on search and filters
+  const getActiveDateRange = useMemo(() => {
+    if (dateMode === "biweekly") {
+      const period = findPeriodByValue(biweeklyPeriods, selectedPeriod);
+      if (period) {
+        return { start: period.start, end: period.end };
+      }
+    } else if (customDateRange?.from) {
+      const endDate = customDateRange.to || customDateRange.from;
+      const endOfDay = new Date(endDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      return {
+        start: customDateRange.from,
+        end: endOfDay,
+      };
+    }
+    return null;
+  }, [dateMode, selectedPeriod, customDateRange, biweeklyPeriods]);
+
   const filteredEntries = useMemo(() => {
     return entries.filter(entry => {
       const matchesSearch = searchQuery === "" || 
@@ -70,9 +149,22 @@ export default function TimeEntries() {
       const matchesTeam = teamFilter === "all" || entry.teamName === teamFilter;
       const matchesUser = userFilter === "all" || entry.user === userFilter;
       
-      return matchesSearch && matchesFolder && matchesTeam && matchesUser;
+      let matchesDate = true;
+      if (getActiveDateRange && entry.start) {
+        try {
+          const entryDate = new Date(parseInt(entry.start));
+          matchesDate = isWithinInterval(entryDate, {
+            start: getActiveDateRange.start,
+            end: getActiveDateRange.end,
+          });
+        } catch {
+          matchesDate = true;
+        }
+      }
+      
+      return matchesSearch && matchesFolder && matchesTeam && matchesUser && matchesDate;
     });
-  }, [entries, searchQuery, folderFilter, teamFilter, userFilter]);
+  }, [entries, searchQuery, folderFilter, teamFilter, userFilter, getActiveDateRange]);
 
   const totalHours = filteredEntries.reduce((sum, entry) => sum + entry.duration, 0);
 
@@ -85,13 +177,26 @@ export default function TimeEntries() {
 
   const hasActiveFilters = searchQuery !== "" || folderFilter !== "all" || teamFilter !== "all" || userFilter !== "all";
 
+  const getDateRangeLabel = () => {
+    if (dateMode === "biweekly") {
+      const period = findPeriodByValue(biweeklyPeriods, selectedPeriod);
+      return period?.label || "Select period";
+    } else if (customDateRange?.from) {
+      if (customDateRange.to) {
+        return `${format(customDateRange.from, "MMM d")} – ${format(customDateRange.to, "MMM d, yyyy")}`;
+      }
+      return format(customDateRange.from, "MMM d, yyyy");
+    }
+    return "Select dates";
+  };
+
   return (
     <Layout>
       <div className="space-y-8">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight" data-testid="heading-time-entries">Time Entries</h1>
-            <p className="text-muted-foreground mt-1">View time tracked in ClickUp over the last 7 days.</p>
+            <p className="text-muted-foreground mt-1">View time tracked in ClickUp.</p>
           </div>
           <Button 
             onClick={() => refetch()}
@@ -166,7 +271,7 @@ export default function TimeEntries() {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground">From the last 7 days</p>
+                  <p className="text-xs text-muted-foreground">{getDateRangeLabel()}</p>
                 </CardContent>
               </Card>
               
@@ -185,6 +290,88 @@ export default function TimeEntries() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Date Range Controls */}
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                    <ToggleGroup
+                      type="single"
+                      value={dateMode}
+                      onValueChange={(value) => {
+                        if (value) setDateMode(value as "biweekly" | "custom");
+                      }}
+                      className="justify-start"
+                    >
+                      <ToggleGroupItem value="biweekly" aria-label="Bi-weekly periods" data-testid="toggle-biweekly">
+                        <CalendarDays className="w-4 h-4 mr-2" />
+                        Bi-weekly
+                      </ToggleGroupItem>
+                      <ToggleGroupItem value="custom" aria-label="Custom date range" data-testid="toggle-custom">
+                        <CalendarRange className="w-4 h-4 mr-2" />
+                        Custom Range
+                      </ToggleGroupItem>
+                    </ToggleGroup>
+
+                    {dateMode === "biweekly" ? (
+                      <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+                        <SelectTrigger className="w-[220px]" data-testid="select-biweekly-period">
+                          <CalendarDays className="w-4 h-4 mr-2" />
+                          <SelectValue placeholder="Select period" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[300px]">
+                          {biweeklyPeriods.map((period) => (
+                            <SelectItem key={period.value} value={period.value}>
+                              {period.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            className="w-[280px] justify-start text-left font-normal"
+                            data-testid="button-custom-dates"
+                          >
+                            <CalendarRange className="mr-2 h-4 w-4" />
+                            {customDateRange?.from ? (
+                              customDateRange.to ? (
+                                <>
+                                  {format(customDateRange.from, "LLL dd, y")} –{" "}
+                                  {format(customDateRange.to, "LLL dd, y")}
+                                </>
+                              ) : (
+                                format(customDateRange.from, "LLL dd, y")
+                              )
+                            ) : (
+                              <span className="text-muted-foreground">Pick a date range</span>
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            initialFocus
+                            mode="range"
+                            defaultMonth={customDateRange?.from}
+                            selected={customDateRange}
+                            onSelect={(range) => {
+                              setCustomDateRange(range);
+                              if (range?.to) {
+                                setCalendarOpen(false);
+                              }
+                            }}
+                            numberOfMonths={2}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Search and Filter Bar */}
             <Card>
@@ -263,7 +450,7 @@ export default function TimeEntries() {
                 <CardDescription>
                   {hasActiveFilters 
                     ? `Showing ${filteredEntries.length} matching entries`
-                    : "All tracked time from ClickUp"
+                    : `Showing ${filteredEntries.length} entries for ${getDateRangeLabel()}`
                   }
                 </CardDescription>
               </CardHeader>
@@ -273,7 +460,7 @@ export default function TimeEntries() {
                     <p className="text-muted-foreground" data-testid="text-no-entries">
                       {hasActiveFilters 
                         ? "No entries match your filters."
-                        : "No time entries found in the last 7 days."
+                        : `No time entries found for ${getDateRangeLabel()}.`
                       }
                     </p>
                     {hasActiveFilters && (
