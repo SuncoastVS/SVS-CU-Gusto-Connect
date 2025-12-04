@@ -141,17 +141,17 @@ export async function registerRoutes(
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - 7);
 
-      const entries = await clickup.getTimeEntries(config.clickupTeamId, {
+      const entries = await clickup.getTimeEntriesWithFolders(config.clickupTeamId, {
         startDate,
         endDate,
       });
 
       const formattedEntries = entries.map(entry => ({
         id: entry.id,
+        folderName: entry.folderName,
         taskName: entry.task?.name || "No task",
         taskId: entry.task?.id,
         user: entry.user?.username || "Unknown",
-        email: entry.user?.email || "N/A",
         duration: convertMillisecondsToHours(entry.duration),
         description: entry.description || "",
         start: entry.start,

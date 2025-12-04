@@ -1,5 +1,11 @@
 const CLICKUP_API_BASE = "https://api.clickup.com/api/v2";
 
+export interface ClickUpTaskLocation {
+  list_id: string;
+  folder_id: string;
+  space_id: string;
+}
+
 export interface ClickUpTimeEntry {
   id: string;
   task: {
@@ -21,6 +27,7 @@ export interface ClickUpTimeEntry {
   tags: { name: string }[];
   source: string;
   at: string;
+  task_location?: ClickUpTaskLocation;
 }
 
 export interface ClickUpTimeEntriesResponse {
@@ -36,8 +43,18 @@ export interface ClickUpTeamsResponse {
   teams: ClickUpTeam[];
 }
 
+export interface ClickUpFolder {
+  id: string;
+  name: string;
+}
+
+export interface ClickUpFoldersResponse {
+  folders: ClickUpFolder[];
+}
+
 export class ClickUpService {
   private apiKey: string;
+  private folderCache: Map<string, string> = new Map();
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
@@ -71,7 +88,6 @@ export class ClickUpService {
     const team = response.teams.find(t => t.id === teamId);
     if (!team) return [];
     
-    // Extract member user IDs from the team
     const members: { id: number; username: string; email: string }[] = [];
     if ((team as any).members) {
       for (const member of (team as any).members) {
@@ -85,6 +101,37 @@ export class ClickUpService {
       }
     }
     return members;
+  }
+
+  async getFolderName(spaceId: string, folderId: string): Promise<string> {
+    if (!folderId || folderId === "0") {
+      return "No Folder";
+    }
+
+    const cacheKey = folderId;
+    if (this.folderCache.has(cacheKey)) {
+      return this.folderCache.get(cacheKey)!;
+    }
+
+    try {
+      const response = await this.request<{ id: string; name: string }>(`/folder/${folderId}`);
+      this.folderCache.set(cacheKey, response.name);
+      return response.name;
+    } catch (error) {
+      console.log(`Could not fetch folder ${folderId}: ${error}`);
+      return "Unknown Folder";
+    }
+  }
+
+  async loadFoldersForSpace(spaceId: string): Promise<void> {
+    try {
+      const response = await this.request<ClickUpFoldersResponse>(`/space/${spaceId}/folder`);
+      for (const folder of response.folders) {
+        this.folderCache.set(folder.id, folder.name);
+      }
+    } catch (error) {
+      console.log(`Could not load folders for space ${spaceId}: ${error}`);
+    }
   }
 
   async getTimeEntries(
@@ -104,7 +151,6 @@ export class ClickUpService {
       params.append("end_date", options.endDate.getTime().toString());
     }
 
-    // If no specific assignee, fetch for all team members
     if (options.assignee) {
       params.append("assignee", options.assignee);
       const queryString = params.toString();
@@ -113,7 +159,6 @@ export class ClickUpService {
       return response.data || [];
     }
 
-    // Fetch team members and get time entries for each
     const members = await this.getTeamMembers(teamId);
     const allEntries: ClickUpTimeEntry[] = [];
     
@@ -133,6 +178,46 @@ export class ClickUpService {
     }
     
     return allEntries;
+  }
+
+  async getTimeEntriesWithFolders(
+    teamId: string,
+    options: {
+      startDate?: Date;
+      endDate?: Date;
+    } = {}
+  ): Promise<(ClickUpTimeEntry & { folderName: string })[]> {
+    const entries = await this.getTimeEntries(teamId, options);
+    
+    // Collect unique space IDs and preload folders (safely handle missing task_location)
+    const spaceIds = new Set<string>();
+    for (const entry of entries) {
+      const spaceId = entry.task_location?.space_id;
+      if (spaceId && spaceId !== "0") {
+        spaceIds.add(spaceId);
+      }
+    }
+    
+    // Load all folders for each space
+    if (spaceIds.size > 0) {
+      await Promise.all(Array.from(spaceIds).map(spaceId => this.loadFoldersForSpace(spaceId)));
+    }
+    
+    // Map entries with folder names (safely handle missing task_location)
+    const entriesWithFolders = entries.map((entry) => {
+      let folderName = "No Folder";
+      
+      const folderId = entry.task_location?.folder_id;
+      const spaceId = entry.task_location?.space_id;
+      
+      if (folderId && folderId !== "0" && spaceId) {
+        folderName = this.folderCache.get(folderId) || "Unknown Folder";
+      }
+      
+      return { ...entry, folderName };
+    });
+    
+    return entriesWithFolders;
   }
 
   async testConnection(): Promise<{ success: boolean; teams: ClickUpTeam[] }> {

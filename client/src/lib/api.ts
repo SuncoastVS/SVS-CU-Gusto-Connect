@@ -45,10 +45,10 @@ export interface ClickUpTeam {
 
 export interface ClickUpTimeEntry {
   id: string;
+  folderName: string;
   taskName: string;
   taskId?: string;
   user: string;
-  email: string;
   duration: number;
   description: string;
   start: string;
