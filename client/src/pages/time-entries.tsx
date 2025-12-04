@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Clock, RefreshCw, AlertCircle, User, Search, FolderOpen, X, ExternalLink } from "lucide-react";
+import { Clock, RefreshCw, AlertCircle, User, Search, FolderOpen, X, ExternalLink, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchClickUpTimeEntries, fetchConfiguration } from "@/lib/api";
 import { Link } from "wouter";
@@ -21,6 +21,7 @@ import { useState, useMemo } from "react";
 export default function TimeEntries() {
   const [searchQuery, setSearchQuery] = useState("");
   const [folderFilter, setFolderFilter] = useState<string>("all");
+  const [teamFilter, setTeamFilter] = useState<string>("all");
   const [userFilter, setUserFilter] = useState<string>("all");
 
   const { data: config } = useQuery({
@@ -37,18 +38,21 @@ export default function TimeEntries() {
 
   const isConfigured = config?.clickupApiKey && config?.clickupTeamId;
 
-  // Get unique folders and users for filter dropdowns
-  const { uniqueFolders, uniqueUsers } = useMemo(() => {
+  // Get unique folders, teams, and users for filter dropdowns
+  const { uniqueFolders, uniqueTeams, uniqueUsers } = useMemo(() => {
     const folders = new Set<string>();
+    const teams = new Set<string>();
     const users = new Set<string>();
     
     entries.forEach(entry => {
       if (entry.folderName) folders.add(entry.folderName);
+      if (entry.teamName) teams.add(entry.teamName);
       if (entry.user) users.add(entry.user);
     });
     
     return {
       uniqueFolders: Array.from(folders).sort(),
+      uniqueTeams: Array.from(teams).sort(),
       uniqueUsers: Array.from(users).sort(),
     };
   }, [entries]);
@@ -59,24 +63,27 @@ export default function TimeEntries() {
       const matchesSearch = searchQuery === "" || 
         entry.taskName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         entry.folderName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        entry.teamName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         entry.user.toLowerCase().includes(searchQuery.toLowerCase());
       
       const matchesFolder = folderFilter === "all" || entry.folderName === folderFilter;
+      const matchesTeam = teamFilter === "all" || entry.teamName === teamFilter;
       const matchesUser = userFilter === "all" || entry.user === userFilter;
       
-      return matchesSearch && matchesFolder && matchesUser;
+      return matchesSearch && matchesFolder && matchesTeam && matchesUser;
     });
-  }, [entries, searchQuery, folderFilter, userFilter]);
+  }, [entries, searchQuery, folderFilter, teamFilter, userFilter]);
 
   const totalHours = filteredEntries.reduce((sum, entry) => sum + entry.duration, 0);
 
   const clearFilters = () => {
     setSearchQuery("");
     setFolderFilter("all");
+    setTeamFilter("all");
     setUserFilter("all");
   };
 
-  const hasActiveFilters = searchQuery !== "" || folderFilter !== "all" || userFilter !== "all";
+  const hasActiveFilters = searchQuery !== "" || folderFilter !== "all" || teamFilter !== "all" || userFilter !== "all";
 
   return (
     <Layout>
@@ -194,7 +201,7 @@ export default function TimeEntries() {
                     />
                   </div>
                   
-                  <div className="flex gap-3">
+                  <div className="flex flex-wrap gap-3">
                     <Select value={folderFilter} onValueChange={setFolderFilter}>
                       <SelectTrigger className="w-[180px]" data-testid="select-folder-filter">
                         <FolderOpen className="w-4 h-4 mr-2" />
@@ -204,6 +211,19 @@ export default function TimeEntries() {
                         <SelectItem value="all">All Folders</SelectItem>
                         {uniqueFolders.map(folder => (
                           <SelectItem key={folder} value={folder}>{folder}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    
+                    <Select value={teamFilter} onValueChange={setTeamFilter}>
+                      <SelectTrigger className="w-[180px]" data-testid="select-team-filter">
+                        <Users className="w-4 h-4 mr-2" />
+                        <SelectValue placeholder="All Teams" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Teams</SelectItem>
+                        {uniqueTeams.map(team => (
+                          <SelectItem key={team} value={team}>{team}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -273,6 +293,7 @@ export default function TimeEntries() {
                         <TableHead>Folder</TableHead>
                         <TableHead>Task Name</TableHead>
                         <TableHead>Hours</TableHead>
+                        <TableHead>Team</TableHead>
                         <TableHead>User</TableHead>
                         <TableHead>Billable</TableHead>
                         <TableHead className="w-12"></TableHead>
@@ -301,6 +322,12 @@ export default function TimeEntries() {
                             <Badge variant="secondary" className="font-mono">
                               {entry.duration.toFixed(2)} hrs
                             </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Users className="w-3 h-3 text-muted-foreground" />
+                              <span className="text-sm">{entry.teamName}</span>
+                            </div>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
