@@ -50,6 +50,7 @@ export interface ClickUpTimeEntry {
   taskName: string;
   taskId?: string;
   user: string;
+  userEmail: string;
   duration: number;
   description: string;
   start: string;
@@ -154,6 +155,67 @@ export async function updateUserTeamMapping(
   if (!res.ok) {
     const error = await res.json();
     throw new Error(error.error || "Failed to update user-team mapping");
+  }
+  return res.json();
+}
+
+export async function getGustoAuthUrl(): Promise<{ url: string }> {
+  const res = await fetch(`${API_BASE}/gusto/auth-url`);
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || "Failed to get auth URL");
+  }
+  return res.json();
+}
+
+export async function disconnectGusto(): Promise<void> {
+  const res = await fetch(`${API_BASE}/gusto/disconnect`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || "Failed to disconnect");
+  }
+}
+
+export interface GustoEmployee {
+  uuid: string;
+  name: string;
+  email: string;
+  jobUuid: string | null;
+  jobTitle: string | null;
+}
+
+export async function fetchGustoEmployees(): Promise<GustoEmployee[]> {
+  const res = await fetch(`${API_BASE}/gusto/employees`);
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || "Failed to fetch employees");
+  }
+  return res.json();
+}
+
+export interface GustoSyncResult {
+  success: number;
+  failed: number;
+  errors: string[];
+}
+
+export async function syncTimeToGusto(entries: Array<{
+  employeeUuid: string;
+  jobUuid: string;
+  hours: number;
+  date: Date;
+  description?: string;
+}>): Promise<GustoSyncResult> {
+  const res = await fetch(`${API_BASE}/gusto/sync-time`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ entries }),
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || "Failed to sync time");
   }
   return res.json();
 }

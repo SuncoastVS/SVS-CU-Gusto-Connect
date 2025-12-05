@@ -15,13 +15,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Clock, RefreshCw, AlertCircle, User, Search, FolderOpen, X, ExternalLink, Users, CalendarDays, CalendarRange } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { fetchClickUpTimeEntries, fetchConfiguration } from "@/lib/api";
+import { Clock, RefreshCw, AlertCircle, User, Search, FolderOpen, X, ExternalLink, Users, CalendarDays, CalendarRange, Send, Loader2, CheckCircle2 } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { fetchClickUpTimeEntries, fetchConfiguration, fetchGustoEmployees, syncTimeToGusto, type GustoEmployee, type ClickUpTimeEntry } from "@/lib/api";
 import { Link } from "wouter";
 import { useState, useMemo } from "react";
 import { format, getDaysInMonth } from "date-fns";
 import type { DateRange } from "react-day-picker";
+import { toast } from "sonner";
 
 interface BiweeklyPeriod {
   label: string;
@@ -124,6 +125,29 @@ export default function TimeEntries() {
     retry: false,
   });
 
+  const isGustoConnected = !!config?.gustoAccessToken && !!config?.gustoCompanyId;
+
+  const { data: gustoEmployees = [] } = useQuery({
+    queryKey: ["gusto-employees"],
+    queryFn: fetchGustoEmployees,
+    enabled: isGustoConnected,
+  });
+
+  const syncToGustoMutation = useMutation({
+    mutationFn: syncTimeToGusto,
+    onSuccess: (result) => {
+      if (result.success > 0) {
+        toast.success(`Successfully synced ${result.success} time entries to Gusto`);
+      }
+      if (result.failed > 0) {
+        toast.error(`Failed to sync ${result.failed} entries: ${result.errors.join(', ')}`);
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(`Sync failed: ${error.message}`);
+    },
+  });
+
   const { uniqueFolders, uniqueTeams, uniqueUsers } = useMemo(() => {
     const folders = new Set<string>();
     const teams = new Set<string>();
@@ -157,6 +181,68 @@ export default function TimeEntries() {
       return matchesSearch && matchesFolder && matchesTeam && matchesUser;
     });
   }, [entries, searchQuery, folderFilter, teamFilter, userFilter]);
+
+  const matchedEntries = useMemo(() => {
+    if (!gustoEmployees.length) return [];
+    
+    const emailToEmployee = new Map<string, GustoEmployee>();
+    gustoEmployees.forEach(emp => {
+      if (emp.email) {
+        emailToEmployee.set(emp.email.toLowerCase(), emp);
+      }
+    });
+
+    return filteredEntries
+      .filter(entry => {
+        const email = entry.userEmail?.toLowerCase();
+        return email && emailToEmployee.has(email);
+      })
+      .map(entry => {
+        const employee = emailToEmployee.get(entry.userEmail.toLowerCase())!;
+        return {
+          entry,
+          employee,
+        };
+      });
+  }, [filteredEntries, gustoEmployees]);
+
+  const unmatchedUsers = useMemo(() => {
+    if (!gustoEmployees.length) return [];
+    
+    const emailToEmployee = new Map<string, GustoEmployee>();
+    gustoEmployees.forEach(emp => {
+      if (emp.email) {
+        emailToEmployee.set(emp.email.toLowerCase(), emp);
+      }
+    });
+
+    const unmatchedSet = new Set<string>();
+    filteredEntries.forEach(entry => {
+      const email = entry.userEmail?.toLowerCase();
+      if (!email || !emailToEmployee.has(email)) {
+        unmatchedSet.add(entry.user);
+      }
+    });
+
+    return Array.from(unmatchedSet);
+  }, [filteredEntries, gustoEmployees]);
+
+  const handleSendToGusto = () => {
+    if (!matchedEntries.length) {
+      toast.error("No time entries could be matched to Gusto employees");
+      return;
+    }
+
+    const entriesToSync = matchedEntries.map(({ entry, employee }) => ({
+      employeeUuid: employee.uuid,
+      jobUuid: employee.jobUuid || "",
+      hours: entry.duration,
+      date: new Date(entry.start),
+      description: `${entry.taskName} - ${entry.folderName}`,
+    }));
+
+    syncToGustoMutation.mutate(entriesToSync);
+  };
 
   const totalHours = filteredEntries.reduce((sum, entry) => sum + entry.duration, 0);
 
@@ -450,13 +536,55 @@ export default function TimeEntries() {
             ) : (
               <Card>
                 <CardHeader>
-                  <CardTitle>Time Entries</CardTitle>
-                  <CardDescription>
-                    {hasActiveFilters 
-                      ? `Showing ${filteredEntries.length} matching entries`
-                      : `Showing ${filteredEntries.length} entries for ${getDateRangeLabel()}`
-                    }
-                  </CardDescription>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                      <CardTitle>Time Entries</CardTitle>
+                      <CardDescription>
+                        {hasActiveFilters 
+                          ? `Showing ${filteredEntries.length} matching entries`
+                          : `Showing ${filteredEntries.length} entries for ${getDateRangeLabel()}`
+                        }
+                      </CardDescription>
+                    </div>
+                    
+                    {isGustoConnected && filteredEntries.length > 0 && (
+                      <div className="flex flex-col sm:items-end gap-2">
+                        <Button
+                          onClick={handleSendToGusto}
+                          disabled={syncToGustoMutation.isPending || matchedEntries.length === 0}
+                          className="gap-2"
+                          data-testid="button-send-to-gusto"
+                        >
+                          {syncToGustoMutation.isPending ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Syncing...
+                            </>
+                          ) : (
+                            <>
+                              <Send className="w-4 h-4" />
+                              Send to Gusto ({matchedEntries.length})
+                            </>
+                          )}
+                        </Button>
+                        {matchedEntries.length < filteredEntries.length && (
+                          <p className="text-xs text-muted-foreground">
+                            {filteredEntries.length - matchedEntries.length} entries could not be matched to Gusto employees
+                            {unmatchedUsers.length > 0 && ` (${unmatchedUsers.join(", ")})`}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    
+                    {!isGustoConnected && filteredEntries.length > 0 && (
+                      <Link href="/settings">
+                        <Button variant="outline" className="gap-2" data-testid="button-connect-gusto-prompt">
+                          <Send className="w-4 h-4" />
+                          Connect Gusto to Sync
+                        </Button>
+                      </Link>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent className="p-0">
                   {filteredEntries.length === 0 ? (

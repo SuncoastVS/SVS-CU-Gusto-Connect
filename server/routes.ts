@@ -9,6 +9,7 @@ import {
 } from "@shared/schema";
 import { z } from "zod";
 import { ClickUpService, matchTaskToRule, convertMillisecondsToHours } from "./services/clickup";
+import { GustoService } from "./services/gusto";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -268,6 +269,7 @@ export async function registerRoutes(
         taskName: entry.task?.name || "No task",
         taskId: entry.task?.id,
         user: entry.user?.username || "Unknown",
+        userEmail: entry.user?.email || "",
         duration: convertMillisecondsToHours(entry.duration),
         description: entry.description || "",
         start: entry.start,
@@ -393,6 +395,193 @@ export async function registerRoutes(
   // Health check
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  // Gusto OAuth endpoints
+  const getGustoRedirectUri = (req: any) => {
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    return `${protocol}://${host}/api/gusto/callback`;
+  };
+
+  app.get("/api/gusto/auth-url", async (req, res) => {
+    try {
+      const clientId = process.env.GUSTO_CLIENT_ID;
+      const clientSecret = process.env.GUSTO_CLIENT_SECRET;
+
+      if (!clientId || !clientSecret) {
+        return res.status(500).json({ error: "Gusto credentials not configured" });
+      }
+
+      const gusto = new GustoService({
+        clientId,
+        clientSecret,
+        redirectUri: getGustoRedirectUri(req),
+      });
+
+      const authUrl = gusto.getAuthorizationUrl();
+      res.json({ url: authUrl });
+    } catch (error) {
+      console.error("Error generating Gusto auth URL:", error);
+      res.status(500).json({ error: "Failed to generate authorization URL" });
+    }
+  });
+
+  app.get("/api/gusto/callback", async (req, res) => {
+    try {
+      const { code, error: authError } = req.query;
+
+      if (authError) {
+        return res.redirect(`/settings?gusto_error=${encodeURIComponent(authError as string)}`);
+      }
+
+      if (!code) {
+        return res.redirect("/settings?gusto_error=No authorization code received");
+      }
+
+      const clientId = process.env.GUSTO_CLIENT_ID;
+      const clientSecret = process.env.GUSTO_CLIENT_SECRET;
+
+      if (!clientId || !clientSecret) {
+        return res.redirect("/settings?gusto_error=Gusto credentials not configured");
+      }
+
+      const gusto = new GustoService({
+        clientId,
+        clientSecret,
+        redirectUri: getGustoRedirectUri(req),
+      });
+
+      const tokens = await gusto.exchangeCodeForTokens(code as string);
+
+      const gustoWithToken = new GustoService({
+        clientId,
+        clientSecret,
+        redirectUri: getGustoRedirectUri(req),
+        accessToken: tokens.accessToken,
+      });
+
+      let companyId = "";
+      let companyName = "";
+      
+      try {
+        const companies = await gustoWithToken.getCompanies();
+        if (companies.length > 0) {
+          companyId = companies[0].uuid;
+          companyName = companies[0].name;
+        }
+      } catch (e) {
+        console.error("Failed to fetch Gusto companies:", e);
+      }
+
+      await storage.upsertConfiguration({
+        gustoAccessToken: tokens.accessToken,
+        gustoRefreshToken: tokens.refreshToken,
+        gustoTokenExpiresAt: tokens.expiresAt,
+        gustoCompanyId: companyId,
+        gustoCompanyName: companyName,
+      });
+
+      res.redirect("/settings?gusto_success=true");
+    } catch (error) {
+      console.error("Gusto OAuth callback failed:", error);
+      res.redirect(`/settings?gusto_error=${encodeURIComponent("Failed to connect to Gusto")}`);
+    }
+  });
+
+  app.post("/api/gusto/disconnect", async (req, res) => {
+    try {
+      await storage.upsertConfiguration({
+        gustoAccessToken: null,
+        gustoRefreshToken: null,
+        gustoTokenExpiresAt: null,
+        gustoCompanyId: null,
+        gustoCompanyName: null,
+      });
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to disconnect Gusto:", error);
+      res.status(500).json({ error: "Failed to disconnect" });
+    }
+  });
+
+  app.get("/api/gusto/employees", async (req, res) => {
+    try {
+      const config = await storage.getConfiguration();
+      
+      if (!config?.gustoAccessToken || !config?.gustoCompanyId) {
+        return res.status(400).json({ error: "Gusto not connected" });
+      }
+
+      const clientId = process.env.GUSTO_CLIENT_ID;
+      const clientSecret = process.env.GUSTO_CLIENT_SECRET;
+
+      if (!clientId || !clientSecret) {
+        return res.status(500).json({ error: "Gusto credentials not configured" });
+      }
+
+      const gusto = new GustoService({
+        clientId,
+        clientSecret,
+        redirectUri: getGustoRedirectUri(req),
+        accessToken: config.gustoAccessToken,
+      });
+
+      const employees = await gusto.getEmployees(config.gustoCompanyId);
+      
+      const formattedEmployees = employees.map(emp => ({
+        uuid: emp.uuid,
+        name: `${emp.first_name} ${emp.last_name}`,
+        email: emp.email,
+        jobUuid: emp.jobs?.[0]?.uuid || null,
+        jobTitle: emp.jobs?.[0]?.title || null,
+      }));
+
+      res.json(formattedEmployees);
+    } catch (error) {
+      console.error("Failed to fetch Gusto employees:", error);
+      res.status(500).json({ error: "Failed to fetch employees" });
+    }
+  });
+
+  app.post("/api/gusto/sync-time", async (req, res) => {
+    try {
+      const config = await storage.getConfiguration();
+      
+      if (!config?.gustoAccessToken || !config?.gustoCompanyId) {
+        return res.status(400).json({ error: "Gusto not connected" });
+      }
+
+      const clientId = process.env.GUSTO_CLIENT_ID;
+      const clientSecret = process.env.GUSTO_CLIENT_SECRET;
+
+      if (!clientId || !clientSecret) {
+        return res.status(500).json({ error: "Gusto credentials not configured" });
+      }
+
+      const { entries } = req.body;
+
+      if (!entries || !Array.isArray(entries)) {
+        return res.status(400).json({ error: "Invalid entries data" });
+      }
+
+      const gusto = new GustoService({
+        clientId,
+        clientSecret,
+        redirectUri: getGustoRedirectUri(req),
+        accessToken: config.gustoAccessToken,
+      });
+
+      const results = await gusto.createTimeSheetsForEntries(
+        config.gustoCompanyId,
+        entries
+      );
+
+      res.json(results);
+    } catch (error) {
+      console.error("Failed to sync time to Gusto:", error);
+      res.status(500).json({ error: "Failed to sync time entries" });
+    }
   });
 
   return httpServer;

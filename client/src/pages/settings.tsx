@@ -26,17 +26,130 @@ import {
   fetchClickUpUsers,
   fetchUserTeamMappings,
   updateUserTeamMapping,
+  getGustoAuthUrl,
+  disconnectGusto,
   type ClickUpTeam,
   type ClickUpUser,
 } from "@/lib/api";
 import type { Team, UserTeamMapping } from "@shared/schema";
 import { useState, useEffect } from "react";
+import { useSearch } from "wouter";
 import { toast } from "sonner";
-import { CheckCircle2, Loader2, AlertCircle, Plus, Trash2, Users } from "lucide-react";
+import { CheckCircle2, Loader2, AlertCircle, Plus, Trash2, Users, ExternalLink, Unlink } from "lucide-react";
+import type { Configuration } from "@shared/schema";
+
+function GustoConnectionCard({ config, onDisconnect }: { config?: Configuration; onDisconnect: () => void }) {
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
+
+  const handleConnect = async () => {
+    setIsConnecting(true);
+    try {
+      const { url } = await getGustoAuthUrl();
+      window.location.href = url;
+    } catch (error) {
+      toast.error("Failed to start Gusto connection");
+      setIsConnecting(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    setIsDisconnecting(true);
+    try {
+      await disconnectGusto();
+      toast.success("Disconnected from Gusto");
+      onDisconnect();
+    } catch (error) {
+      toast.error("Failed to disconnect from Gusto");
+    } finally {
+      setIsDisconnecting(false);
+    }
+  };
+
+  const isConnected = config?.gustoAccessToken && config.gustoCompanyId;
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Gusto Integration</CardTitle>
+            <CardDescription>Connect to Gusto to sync time entries for payroll.</CardDescription>
+          </div>
+          {isConnected && (
+            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1">
+              <CheckCircle2 className="w-3 h-3" />
+              Connected
+            </Badge>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isConnected ? (
+          <div className="space-y-4">
+            <div className="rounded-lg bg-muted/50 p-4">
+              <p className="text-sm text-muted-foreground">
+                Connected to Gusto company: <span className="font-medium text-foreground">{config.gustoCompanyId}</span>
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-4">
+            <p className="text-sm text-muted-foreground mb-4">
+              Connect your Gusto account to sync ClickUp time entries with your payroll system.
+            </p>
+          </div>
+        )}
+      </CardContent>
+      <CardFooter className="bg-muted/50 border-t px-6 py-4 flex justify-end">
+        {isConnected ? (
+          <Button
+            variant="destructive"
+            onClick={handleDisconnect}
+            disabled={isDisconnecting}
+            data-testid="button-disconnect-gusto"
+          >
+            {isDisconnecting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Disconnecting...
+              </>
+            ) : (
+              <>
+                <Unlink className="w-4 h-4 mr-2" />
+                Disconnect
+              </>
+            )}
+          </Button>
+        ) : (
+          <Button
+            onClick={handleConnect}
+            disabled={isConnecting}
+            data-testid="button-connect-gusto"
+          >
+            {isConnecting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Connecting...
+              </>
+            ) : (
+              <>
+                <ExternalLink className="w-4 h-4 mr-2" />
+                Connect to Gusto
+              </>
+            )}
+          </Button>
+        )}
+      </CardFooter>
+    </Card>
+  );
+}
 
 export default function Settings() {
   const queryClient = useQueryClient();
-  const { data: config } = useQuery({
+  const searchString = useSearch();
+  
+  const { data: config, refetch: refetchConfig } = useQuery({
     queryKey: ["configuration"],
     queryFn: fetchConfiguration,
   });
@@ -44,12 +157,22 @@ export default function Settings() {
   const [formData, setFormData] = useState({
     clickupApiKey: "",
     clickupTeamId: "",
-    gustoAccessToken: "",
-    gustoCompanyId: "",
     syncEnabled: true,
     syncFrequency: "daily",
     syncTime: "00:00",
   });
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchString);
+    if (params.get("gusto_success") === "true") {
+      toast.success("Successfully connected to Gusto!");
+      refetchConfig();
+      window.history.replaceState({}, "", "/settings");
+    } else if (params.get("gusto_error")) {
+      toast.error(`Gusto connection failed: ${params.get("gusto_error")}`);
+      window.history.replaceState({}, "", "/settings");
+    }
+  }, [searchString, refetchConfig]);
 
   const [clickupTeams, setClickupTeams] = useState<ClickUpTeam[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
@@ -76,8 +199,6 @@ export default function Settings() {
       setFormData({
         clickupApiKey: config.clickupApiKey || "",
         clickupTeamId: config.clickupTeamId || "",
-        gustoAccessToken: config.gustoAccessToken || "",
-        gustoCompanyId: config.gustoCompanyId || "",
         syncEnabled: config.syncEnabled ?? true,
         syncFrequency: config.syncFrequency || "daily",
         syncTime: config.syncTime || "00:00",
@@ -300,47 +421,10 @@ export default function Settings() {
               </CardFooter>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Gusto Configuration</CardTitle>
-                <CardDescription>Connect to Gusto to push payroll hours (coming soon).</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="gustoToken">Access Token</Label>
-                  <Input
-                    id="gustoToken"
-                    type="password"
-                    placeholder="Bearer token"
-                    value={formData.gustoAccessToken}
-                    onChange={(e) => setFormData({ ...formData, gustoAccessToken: e.target.value })}
-                    data-testid="input-gusto-token"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    OAuth2 access token from Gusto API
-                  </p>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="gustoCompany">Company ID</Label>
-                  <Input
-                    id="gustoCompany"
-                    placeholder="123456"
-                    value={formData.gustoCompanyId}
-                    onChange={(e) => setFormData({ ...formData, gustoCompanyId: e.target.value })}
-                    data-testid="input-gusto-company"
-                  />
-                </div>
-              </CardContent>
-              <CardFooter className="bg-muted/50 border-t px-6 py-4 flex justify-end">
-                <Button 
-                  onClick={handleSave}
-                  disabled={updateMutation.isPending}
-                  data-testid="button-save-gusto"
-                >
-                  {updateMutation.isPending ? "Saving..." : "Save"}
-                </Button>
-              </CardFooter>
-            </Card>
+            <GustoConnectionCard 
+              config={config} 
+              onDisconnect={() => refetchConfig()}
+            />
           </TabsContent>
 
           <TabsContent value="teams" className="space-y-6">
