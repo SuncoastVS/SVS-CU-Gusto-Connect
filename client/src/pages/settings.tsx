@@ -195,7 +195,7 @@ export default function Settings() {
         <Tabs defaultValue="integrations" className="w-full">
           <TabsList className="mb-6">
             <TabsTrigger value="integrations" data-testid="tab-integrations">Integrations</TabsTrigger>
-            <TabsTrigger value="teams" data-testid="tab-teams">Team Management</TabsTrigger>
+            <TabsTrigger value="teams" data-testid="tab-teams">CU Team Management</TabsTrigger>
             <TabsTrigger value="schedule" data-testid="tab-schedule">Schedule</TabsTrigger>
           </TabsList>
           
