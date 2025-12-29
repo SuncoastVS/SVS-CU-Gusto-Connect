@@ -21,7 +21,6 @@ import { fetchClickUpTimeEntries, fetchConfiguration, fetchGustoEmployees, syncT
 import { Link } from "wouter";
 import { useState, useMemo } from "react";
 import { format, getDaysInMonth } from "date-fns";
-import type { DateRange } from "react-day-picker";
 import { toast } from "sonner";
 
 interface BiweeklyPeriod {
@@ -82,8 +81,10 @@ export default function TimeEntries() {
   
   const [dateMode, setDateMode] = useState<"biweekly" | "custom">("biweekly");
   const [selectedPeriod, setSelectedPeriod] = useState<string>(getCurrentPeriodValue());
-  const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
-  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [customStartDate, setCustomStartDate] = useState<Date | undefined>(undefined);
+  const [customEndDate, setCustomEndDate] = useState<Date | undefined>(undefined);
+  const [startCalendarOpen, setStartCalendarOpen] = useState(false);
+  const [endCalendarOpen, setEndCalendarOpen] = useState(false);
 
   const currentYear = new Date().getFullYear();
   const biweeklyPeriods = useMemo(() => generateBiweeklyPeriods(currentYear), [currentYear]);
@@ -101,17 +102,17 @@ export default function TimeEntries() {
       if (period) {
         return { start: period.start, end: period.end };
       }
-    } else if (customDateRange?.from) {
-      const endDate = customDateRange.to || customDateRange.from;
+    } else if (customStartDate) {
+      const endDate = customEndDate || customStartDate;
       const endOfDay = new Date(endDate);
       endOfDay.setHours(23, 59, 59, 999);
       return {
-        start: customDateRange.from,
+        start: customStartDate,
         end: endOfDay,
       };
     }
     return null;
-  }, [dateMode, selectedPeriod, customDateRange, biweeklyPeriods]);
+  }, [dateMode, selectedPeriod, customStartDate, customEndDate, biweeklyPeriods]);
 
   const { data: entries = [], isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ["clickup-time-entries", getActiveDateRange?.start?.getTime(), getActiveDateRange?.end?.getTime()],
@@ -259,11 +260,11 @@ export default function TimeEntries() {
     if (dateMode === "biweekly") {
       const period = findPeriodByValue(biweeklyPeriods, selectedPeriod);
       return period?.label || "Select period";
-    } else if (customDateRange?.from) {
-      if (customDateRange.to) {
-        return `${format(customDateRange.from, "MMM d")} – ${format(customDateRange.to, "MMM d, yyyy")}`;
+    } else if (customStartDate) {
+      if (customEndDate) {
+        return `${format(customStartDate, "MMM d")} – ${format(customEndDate, "MMM d, yyyy")}`;
       }
-      return format(customDateRange.from, "MMM d, yyyy");
+      return format(customStartDate, "MMM d, yyyy");
     }
     return "Select dates";
   };
@@ -382,44 +383,69 @@ export default function TimeEntries() {
                         </SelectContent>
                       </Select>
                     ) : (
-                      <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className="w-[280px] justify-start text-left font-normal"
-                            data-testid="button-custom-dates"
-                          >
-                            <CalendarRange className="mr-2 h-4 w-4" />
-                            {customDateRange?.from ? (
-                              customDateRange.to ? (
-                                <>
-                                  {format(customDateRange.from, "LLL dd, y")} –{" "}
-                                  {format(customDateRange.to, "LLL dd, y")}
-                                </>
+                      <div className="flex items-center gap-2">
+                        <Popover open={startCalendarOpen} onOpenChange={setStartCalendarOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="w-[160px] justify-start text-left font-normal"
+                              data-testid="button-start-date"
+                            >
+                              <CalendarDays className="mr-2 h-4 w-4" />
+                              {customStartDate ? (
+                                format(customStartDate, "LLL dd, y")
                               ) : (
-                                format(customDateRange.from, "LLL dd, y")
-                              )
-                            ) : (
-                              <span className="text-muted-foreground">Pick a date range</span>
-                            )}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            initialFocus
-                            mode="range"
-                            defaultMonth={customDateRange?.from}
-                            selected={customDateRange}
-                            onSelect={(range) => {
-                              setCustomDateRange(range);
-                              if (range?.to) {
-                                setCalendarOpen(false);
-                              }
-                            }}
-                            numberOfMonths={2}
-                          />
-                        </PopoverContent>
-                      </Popover>
+                                <span className="text-muted-foreground">Start Date</span>
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              initialFocus
+                              mode="single"
+                              selected={customStartDate}
+                              onSelect={(date) => {
+                                setCustomStartDate(date);
+                                if (date && customEndDate && date > customEndDate) {
+                                  setCustomEndDate(date);
+                                }
+                                setStartCalendarOpen(false);
+                              }}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        
+                        <span className="text-muted-foreground">to</span>
+                        
+                        <Popover open={endCalendarOpen} onOpenChange={setEndCalendarOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="w-[160px] justify-start text-left font-normal"
+                              data-testid="button-end-date"
+                            >
+                              <CalendarDays className="mr-2 h-4 w-4" />
+                              {customEndDate ? (
+                                format(customEndDate, "LLL dd, y")
+                              ) : (
+                                <span className="text-muted-foreground">End Date</span>
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              initialFocus
+                              mode="single"
+                              selected={customEndDate}
+                              disabled={(date) => customStartDate ? date < customStartDate : false}
+                              onSelect={(date) => {
+                                setCustomEndDate(date);
+                                setEndCalendarOpen(false);
+                              }}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
                     )}
                   </div>
 
