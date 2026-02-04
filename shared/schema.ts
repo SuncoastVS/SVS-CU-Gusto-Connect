@@ -108,3 +108,43 @@ export const insertUserTeamMappingSchema = createInsertSchema(userTeamMappings).
 
 export type InsertUserTeamMapping = z.infer<typeof insertUserTeamMappingSchema>;
 export type UserTeamMapping = typeof userTeamMappings.$inferSelect;
+
+export const clickupGustoUserMappings = pgTable("clickup_gusto_user_mappings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clickupUserId: integer("clickup_user_id").notNull().unique(),
+  clickupUsername: text("clickup_username").notNull(),
+  clickupEmail: text("clickup_email"),
+  gustoEmployeeId: text("gusto_employee_id"),
+  gustoEmployeeName: text("gusto_employee_name"),
+  gustoEmployeeEmail: text("gusto_employee_email"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertClickupGustoUserMappingSchema = createInsertSchema(clickupGustoUserMappings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertClickupGustoUserMapping = z.infer<typeof insertClickupGustoUserMappingSchema>;
+export type ClickupGustoUserMapping = typeof clickupGustoUserMappings.$inferSelect;
+
+export const clickupGustoSpaceMappings = pgTable("clickup_gusto_space_mappings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clickupSpaceId: text("clickup_space_id").notNull().unique(),
+  clickupSpaceName: text("clickup_space_name").notNull(),
+  gustoProjectId: text("gusto_project_id"),
+  gustoProjectName: text("gusto_project_name"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertClickupGustoSpaceMappingSchema = createInsertSchema(clickupGustoSpaceMappings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertClickupGustoSpaceMapping = z.infer<typeof insertClickupGustoSpaceMappingSchema>;
+export type ClickupGustoSpaceMapping = typeof clickupGustoSpaceMappings.$inferSelect;

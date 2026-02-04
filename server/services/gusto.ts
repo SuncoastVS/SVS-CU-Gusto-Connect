@@ -41,6 +41,12 @@ export interface GustoTimeSheet {
   metadata?: Record<string, string>;
 }
 
+export interface GustoProject {
+  uuid: string;
+  name: string;
+  active: boolean;
+}
+
 export class GustoService {
   private clientId: string;
   private clientSecret: string;
@@ -204,6 +210,18 @@ export class GustoService {
     return this.apiRequest<GustoEmployee[]>(
       `/v1/companies/${companyUuid}/employees`
     );
+  }
+
+  async getProjects(companyUuid: string): Promise<GustoProject[]> {
+    try {
+      const response = await this.apiRequest<GustoProject[]>(
+        `/v1/companies/${companyUuid}/projects`
+      );
+      return response;
+    } catch (error) {
+      console.log("Projects API not available, returning empty list:", error);
+      return [];
+    }
   }
 
   async createTimeSheet(

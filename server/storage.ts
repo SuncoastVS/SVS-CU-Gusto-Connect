@@ -11,12 +11,18 @@ import {
   type InsertTeam,
   type UserTeamMapping,
   type InsertUserTeamMapping,
+  type ClickupGustoUserMapping,
+  type InsertClickupGustoUserMapping,
+  type ClickupGustoSpaceMapping,
+  type InsertClickupGustoSpaceMapping,
   users,
   configurations,
   mappingRules,
   syncLogs,
   teams,
   userTeamMappings,
+  clickupGustoUserMappings,
+  clickupGustoSpaceMappings,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
@@ -44,6 +50,14 @@ export interface IStorage {
   getUserTeamMappings(): Promise<UserTeamMapping[]>;
   upsertUserTeamMapping(mapping: InsertUserTeamMapping): Promise<UserTeamMapping>;
   getUserTeamMapping(clickupUserId: number): Promise<UserTeamMapping | undefined>;
+  
+  getClickupGustoUserMappings(): Promise<ClickupGustoUserMapping[]>;
+  upsertClickupGustoUserMapping(mapping: InsertClickupGustoUserMapping): Promise<ClickupGustoUserMapping>;
+  getClickupGustoUserMapping(clickupUserId: number): Promise<ClickupGustoUserMapping | undefined>;
+  
+  getClickupGustoSpaceMappings(): Promise<ClickupGustoSpaceMapping[]>;
+  upsertClickupGustoSpaceMapping(mapping: InsertClickupGustoSpaceMapping): Promise<ClickupGustoSpaceMapping>;
+  getClickupGustoSpaceMapping(clickupSpaceId: string): Promise<ClickupGustoSpaceMapping | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -170,6 +184,62 @@ export class DatabaseStorage implements IStorage {
 
   async getUserTeamMapping(clickupUserId: number): Promise<UserTeamMapping | undefined> {
     const [mapping] = await db.select().from(userTeamMappings).where(eq(userTeamMappings.clickupUserId, clickupUserId));
+    return mapping || undefined;
+  }
+
+  async getClickupGustoUserMappings(): Promise<ClickupGustoUserMapping[]> {
+    return db.select().from(clickupGustoUserMappings).orderBy(clickupGustoUserMappings.clickupUsername);
+  }
+
+  async upsertClickupGustoUserMapping(mapping: InsertClickupGustoUserMapping): Promise<ClickupGustoUserMapping> {
+    const existing = await this.getClickupGustoUserMapping(mapping.clickupUserId);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(clickupGustoUserMappings)
+        .set({ ...mapping, updatedAt: new Date() })
+        .where(eq(clickupGustoUserMappings.clickupUserId, mapping.clickupUserId))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(clickupGustoUserMappings)
+        .values(mapping)
+        .returning();
+      return created;
+    }
+  }
+
+  async getClickupGustoUserMapping(clickupUserId: number): Promise<ClickupGustoUserMapping | undefined> {
+    const [mapping] = await db.select().from(clickupGustoUserMappings).where(eq(clickupGustoUserMappings.clickupUserId, clickupUserId));
+    return mapping || undefined;
+  }
+
+  async getClickupGustoSpaceMappings(): Promise<ClickupGustoSpaceMapping[]> {
+    return db.select().from(clickupGustoSpaceMappings).orderBy(clickupGustoSpaceMappings.clickupSpaceName);
+  }
+
+  async upsertClickupGustoSpaceMapping(mapping: InsertClickupGustoSpaceMapping): Promise<ClickupGustoSpaceMapping> {
+    const existing = await this.getClickupGustoSpaceMapping(mapping.clickupSpaceId);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(clickupGustoSpaceMappings)
+        .set({ ...mapping, updatedAt: new Date() })
+        .where(eq(clickupGustoSpaceMappings.clickupSpaceId, mapping.clickupSpaceId))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(clickupGustoSpaceMappings)
+        .values(mapping)
+        .returning();
+      return created;
+    }
+  }
+
+  async getClickupGustoSpaceMapping(clickupSpaceId: string): Promise<ClickupGustoSpaceMapping | undefined> {
+    const [mapping] = await db.select().from(clickupGustoSpaceMappings).where(eq(clickupGustoSpaceMappings.clickupSpaceId, clickupSpaceId));
     return mapping || undefined;
   }
 }

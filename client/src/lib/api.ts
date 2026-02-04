@@ -1,4 +1,4 @@
-import type { Configuration, SyncLog, Team, UserTeamMapping } from "@shared/schema";
+import type { Configuration, SyncLog, Team, UserTeamMapping, ClickupGustoUserMapping, ClickupGustoSpaceMapping } from "@shared/schema";
 
 const API_BASE = "/api";
 
@@ -217,6 +217,85 @@ export async function syncTimeToGusto(entries: Array<{
   if (!res.ok) {
     const error = await res.json();
     throw new Error(error.error || "Failed to sync time");
+  }
+  return res.json();
+}
+
+export interface GustoProject {
+  uuid: string;
+  name: string;
+  active: boolean;
+}
+
+export async function fetchGustoProjects(): Promise<GustoProject[]> {
+  const res = await fetch(`${API_BASE}/gusto/projects`);
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || "Failed to fetch projects");
+  }
+  return res.json();
+}
+
+export interface ClickUpSpace {
+  id: string;
+  name: string;
+}
+
+export async function fetchClickUpSpaces(): Promise<ClickUpSpace[]> {
+  const res = await fetch(`${API_BASE}/clickup/spaces`);
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || "Failed to fetch spaces");
+  }
+  return res.json();
+}
+
+export async function fetchClickupGustoUserMappings(): Promise<ClickupGustoUserMapping[]> {
+  const res = await fetch(`${API_BASE}/mappings/users`);
+  if (!res.ok) throw new Error("Failed to fetch user mappings");
+  return res.json();
+}
+
+export async function saveClickupGustoUserMapping(mapping: {
+  clickupUserId: number;
+  clickupUsername: string;
+  clickupEmail?: string | null;
+  gustoEmployeeId?: string | null;
+  gustoEmployeeName?: string | null;
+  gustoEmployeeEmail?: string | null;
+}): Promise<ClickupGustoUserMapping> {
+  const res = await fetch(`${API_BASE}/mappings/users`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(mapping),
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || "Failed to save user mapping");
+  }
+  return res.json();
+}
+
+export async function fetchClickupGustoSpaceMappings(): Promise<ClickupGustoSpaceMapping[]> {
+  const res = await fetch(`${API_BASE}/mappings/spaces`);
+  if (!res.ok) throw new Error("Failed to fetch space mappings");
+  return res.json();
+}
+
+export async function saveClickupGustoSpaceMapping(mapping: {
+  clickupSpaceId: string;
+  clickupSpaceName: string;
+  gustoProjectId?: string | null;
+  gustoProjectName?: string | null;
+}): Promise<ClickupGustoSpaceMapping> {
+  const res = await fetch(`${API_BASE}/mappings/spaces`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(mapping),
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || "Failed to save space mapping");
   }
   return res.json();
 }

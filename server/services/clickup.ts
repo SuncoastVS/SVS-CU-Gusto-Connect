@@ -224,6 +224,15 @@ export class ClickUpService {
     return this.spaceCache.get(spaceId) || "Unknown Space";
   }
 
+  async getSpaces(teamId: string): Promise<{ id: string; name: string }[]> {
+    await this.loadSpacesForTeam(teamId);
+    const spaces: { id: string; name: string }[] = [];
+    this.spaceCache.forEach((name, id) => {
+      spaces.push({ id, name });
+    });
+    return spaces.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   async getTimeEntries(
     teamId: string,
     options: {

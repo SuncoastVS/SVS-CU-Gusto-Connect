@@ -6,6 +6,8 @@ import {
   insertMappingRuleSchema,
   insertTeamSchema,
   insertUserTeamMappingSchema,
+  insertClickupGustoUserMappingSchema,
+  insertClickupGustoSpaceMappingSchema,
 } from "@shared/schema";
 import { z } from "zod";
 import { ClickUpService, matchTaskToRule, convertMillisecondsToHours } from "./services/clickup";
@@ -620,6 +622,105 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Failed to sync time to Gusto:", error);
       res.status(500).json({ error: "Failed to sync time entries" });
+    }
+  });
+
+  app.get("/api/gusto/projects", async (req, res) => {
+    try {
+      const config = await storage.getConfiguration();
+      
+      if (!config?.gustoAccessToken || !config?.gustoCompanyId) {
+        return res.status(400).json({ error: "Gusto not connected" });
+      }
+
+      const clientId = process.env.GUSTO_CLIENT_ID;
+      const clientSecret = process.env.GUSTO_CLIENT_SECRET;
+      const useDemo = process.env.GUSTO_USE_DEMO === "true";
+
+      if (!clientId || !clientSecret) {
+        return res.status(500).json({ error: "Gusto credentials not configured" });
+      }
+
+      const gusto = new GustoService({
+        clientId,
+        clientSecret,
+        redirectUri: getGustoRedirectUri(req),
+        accessToken: config.gustoAccessToken,
+        useDemo,
+      });
+
+      const projects = await gusto.getProjects(config.gustoCompanyId);
+      res.json(projects);
+    } catch (error) {
+      console.error("Failed to fetch Gusto projects:", error);
+      res.status(500).json({ error: "Failed to fetch projects" });
+    }
+  });
+
+  app.get("/api/clickup/spaces", async (req, res) => {
+    try {
+      const config = await storage.getConfiguration();
+      
+      if (!config?.clickupApiKey || !config?.clickupTeamId) {
+        return res.status(400).json({ error: "ClickUp not fully configured" });
+      }
+
+      const clickup = new ClickUpService(config.clickupApiKey);
+      await clickup.loadSpacesForTeam(config.clickupTeamId);
+      
+      const response = await clickup.getSpaces(config.clickupTeamId);
+      res.json(response);
+    } catch (error) {
+      console.error("Failed to fetch ClickUp spaces:", error);
+      res.status(500).json({ error: "Failed to fetch spaces" });
+    }
+  });
+
+  app.get("/api/mappings/users", async (req, res) => {
+    try {
+      const mappings = await storage.getClickupGustoUserMappings();
+      res.json(mappings);
+    } catch (error) {
+      console.error("Failed to fetch user mappings:", error);
+      res.status(500).json({ error: "Failed to fetch user mappings" });
+    }
+  });
+
+  app.post("/api/mappings/users", async (req, res) => {
+    try {
+      const validated = insertClickupGustoUserMappingSchema.parse(req.body);
+      const mapping = await storage.upsertClickupGustoUserMapping(validated);
+      res.json(mapping);
+    } catch (error) {
+      console.error("Failed to save user mapping:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid mapping data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to save user mapping" });
+    }
+  });
+
+  app.get("/api/mappings/spaces", async (req, res) => {
+    try {
+      const mappings = await storage.getClickupGustoSpaceMappings();
+      res.json(mappings);
+    } catch (error) {
+      console.error("Failed to fetch space mappings:", error);
+      res.status(500).json({ error: "Failed to fetch space mappings" });
+    }
+  });
+
+  app.post("/api/mappings/spaces", async (req, res) => {
+    try {
+      const validated = insertClickupGustoSpaceMappingSchema.parse(req.body);
+      const mapping = await storage.upsertClickupGustoSpaceMapping(validated);
+      res.json(mapping);
+    } catch (error) {
+      console.error("Failed to save space mapping:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid mapping data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to save space mapping" });
     }
   });
 
