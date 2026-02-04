@@ -41,3 +41,8 @@ waitForPort = 5000
 [agent]
 mockupState = "FULLSTACK"
 integrations = ["javascript_database:1.0.0"]
+
+[userenv]
+
+[userenv.shared]
+GUSTO_REDIRECT_URI = "https://click-gusto-connect--sean600.replit.app/api/gusto/callback"

@@ -399,6 +399,12 @@ export async function registerRoutes(
 
   // Gusto OAuth endpoints
   const getGustoRedirectUri = (req: any) => {
+    // Use the configured redirect URI to match what's registered in Gusto developer settings
+    const gustoRedirectUri = process.env.GUSTO_REDIRECT_URI;
+    if (gustoRedirectUri) {
+      return gustoRedirectUri;
+    }
+    // Fallback to dynamic URL construction
     const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
     const host = req.headers['x-forwarded-host'] || req.headers.host;
     return `${protocol}://${host}/api/gusto/callback`;
