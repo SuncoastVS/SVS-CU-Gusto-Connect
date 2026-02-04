@@ -265,6 +265,7 @@ export async function registerRoutes(
       const formattedEntries = entries.map(entry => ({
         id: entry.id,
         folderName: entry.folderName,
+        spaceName: entry.spaceName,
         teamName: entry.user?.id ? (userTeamMap.get(entry.user.id) || "No Team") : "No Team",
         taskName: entry.task?.name || "No task",
         taskId: entry.task?.id,

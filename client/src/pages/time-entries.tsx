@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Clock, RefreshCw, AlertCircle, User, Search, FolderOpen, X, ExternalLink, Users, CalendarDays, CalendarRange, Send, Loader2, CheckCircle2 } from "lucide-react";
+import { Clock, RefreshCw, AlertCircle, User, Search, FolderOpen, X, ExternalLink, Users, CalendarDays, CalendarRange, Send, Loader2, CheckCircle2, Layers } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { fetchClickUpTimeEntries, fetchConfiguration, fetchGustoEmployees, syncTimeToGusto, type GustoEmployee, type ClickUpTimeEntry } from "@/lib/api";
 import { Link } from "wouter";
@@ -76,6 +76,7 @@ function findPeriodByValue(periods: BiweeklyPeriod[], value: string): BiweeklyPe
 export default function TimeEntries() {
   const [searchQuery, setSearchQuery] = useState("");
   const [folderFilter, setFolderFilter] = useState<string>("all");
+  const [spaceFilter, setSpaceFilter] = useState<string>("all");
   const [teamFilter, setTeamFilter] = useState<string>("all");
   const [userFilter, setUserFilter] = useState<string>("all");
   
@@ -149,19 +150,22 @@ export default function TimeEntries() {
     },
   });
 
-  const { uniqueFolders, uniqueTeams, uniqueUsers } = useMemo(() => {
+  const { uniqueFolders, uniqueSpaces, uniqueTeams, uniqueUsers } = useMemo(() => {
     const folders = new Set<string>();
+    const spaces = new Set<string>();
     const teams = new Set<string>();
     const users = new Set<string>();
     
     entries.forEach(entry => {
       if (entry.folderName) folders.add(entry.folderName);
+      if (entry.spaceName) spaces.add(entry.spaceName);
       if (entry.teamName) teams.add(entry.teamName);
       if (entry.user) users.add(entry.user);
     });
     
     return {
       uniqueFolders: Array.from(folders).sort(),
+      uniqueSpaces: Array.from(spaces).sort(),
       uniqueTeams: Array.from(teams).sort(),
       uniqueUsers: Array.from(users).sort(),
     };
@@ -172,16 +176,18 @@ export default function TimeEntries() {
       const matchesSearch = searchQuery === "" || 
         entry.taskName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         entry.folderName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        entry.spaceName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         entry.teamName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         entry.user.toLowerCase().includes(searchQuery.toLowerCase());
       
       const matchesFolder = folderFilter === "all" || entry.folderName === folderFilter;
+      const matchesSpace = spaceFilter === "all" || entry.spaceName === spaceFilter;
       const matchesTeam = teamFilter === "all" || entry.teamName === teamFilter;
       const matchesUser = userFilter === "all" || entry.user === userFilter;
       
-      return matchesSearch && matchesFolder && matchesTeam && matchesUser;
+      return matchesSearch && matchesFolder && matchesSpace && matchesTeam && matchesUser;
     });
-  }, [entries, searchQuery, folderFilter, teamFilter, userFilter]);
+  }, [entries, searchQuery, folderFilter, spaceFilter, teamFilter, userFilter]);
 
   const matchedEntries = useMemo(() => {
     if (!gustoEmployees.length) return [];
@@ -250,11 +256,12 @@ export default function TimeEntries() {
   const clearFilters = () => {
     setSearchQuery("");
     setFolderFilter("all");
+    setSpaceFilter("all");
     setTeamFilter("all");
     setUserFilter("all");
   };
 
-  const hasActiveFilters = searchQuery !== "" || folderFilter !== "all" || teamFilter !== "all" || userFilter !== "all";
+  const hasActiveFilters = searchQuery !== "" || folderFilter !== "all" || spaceFilter !== "all" || teamFilter !== "all" || userFilter !== "all";
 
   const getDateRangeLabel = () => {
     if (dateMode === "biweekly") {
@@ -478,6 +485,19 @@ export default function TimeEntries() {
                   </div>
                   
                   <div className="flex flex-wrap gap-3">
+                    <Select value={spaceFilter} onValueChange={setSpaceFilter}>
+                      <SelectTrigger className="w-[180px]" data-testid="select-space-filter">
+                        <Layers className="w-4 h-4 mr-2" />
+                        <SelectValue placeholder="All Spaces" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Spaces</SelectItem>
+                        {uniqueSpaces.map(space => (
+                          <SelectItem key={space} value={space}>{space}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
                     <Select value={folderFilter} onValueChange={setFolderFilter}>
                       <SelectTrigger className="w-[180px]" data-testid="select-folder-filter">
                         <FolderOpen className="w-4 h-4 mr-2" />
@@ -635,6 +655,7 @@ export default function TimeEntries() {
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead>Space</TableHead>
                           <TableHead>Folder</TableHead>
                           <TableHead>Task Name</TableHead>
                           <TableHead>Hours</TableHead>
@@ -647,6 +668,12 @@ export default function TimeEntries() {
                       <TableBody>
                         {filteredEntries.map((entry) => (
                           <TableRow key={entry.id} data-testid={`entry-row-${entry.id}`}>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Layers className="w-4 h-4 text-muted-foreground" />
+                                <span className="font-medium">{entry.spaceName}</span>
+                              </div>
+                            </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
                                 <FolderOpen className="w-4 h-4 text-muted-foreground" />

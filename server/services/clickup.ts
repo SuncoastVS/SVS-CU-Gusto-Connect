@@ -62,10 +62,22 @@ export interface ClickUpGroupsResponse {
   groups: ClickUpGroup[];
 }
 
+export interface ClickUpSpace {
+  id: string;
+  name: string;
+}
+
+export interface ClickUpSpacesResponse {
+  spaces: ClickUpSpace[];
+}
+
 export class ClickUpService {
   private apiKey: string;
   private folderCache: Map<string, string> = new Map();
+  private spaceCache: Map<string, string> = new Map();
+  private spaceCacheTeamId: string | null = null;
   private userTeamCache: Map<number, string> = new Map();
+  private userTeamCacheTeamId: string | null = null;
   
   private static EXCLUDED_TEAMS = ["Exec Management", "SuncoastVS"];
 
@@ -127,8 +139,12 @@ export class ClickUpService {
   }
 
   async loadUserTeamMapping(teamId: string): Promise<void> {
-    if (this.userTeamCache.size > 0) {
+    if (this.userTeamCache.size > 0 && this.userTeamCacheTeamId === teamId) {
       return;
+    }
+    if (this.userTeamCacheTeamId !== teamId) {
+      this.userTeamCache.clear();
+      this.userTeamCacheTeamId = teamId;
     }
 
     const groups = await this.getUserGroups(teamId);
@@ -183,6 +199,31 @@ export class ClickUpService {
     }
   }
 
+  async loadSpacesForTeam(teamId: string): Promise<void> {
+    if (this.spaceCache.size > 0 && this.spaceCacheTeamId === teamId) {
+      return;
+    }
+    if (this.spaceCacheTeamId !== teamId) {
+      this.spaceCache.clear();
+      this.spaceCacheTeamId = teamId;
+    }
+    try {
+      const response = await this.request<ClickUpSpacesResponse>(`/team/${teamId}/space`);
+      for (const space of response.spaces) {
+        this.spaceCache.set(space.id, space.name);
+      }
+    } catch (error) {
+      console.log(`Could not load spaces for team ${teamId}: ${error}`);
+    }
+  }
+
+  getSpaceName(spaceId: string): string {
+    if (!spaceId || spaceId === "0") {
+      return "No Space";
+    }
+    return this.spaceCache.get(spaceId) || "Unknown Space";
+  }
+
   async getTimeEntries(
     teamId: string,
     options: {
@@ -235,11 +276,14 @@ export class ClickUpService {
       startDate?: Date;
       endDate?: Date;
     } = {}
-  ): Promise<(ClickUpTimeEntry & { folderName: string; teamName: string })[]> {
+  ): Promise<(ClickUpTimeEntry & { folderName: string; spaceName: string; teamName: string })[]> {
     const entries = await this.getTimeEntries(teamId, options);
     
-    // Load user-to-team mapping
-    await this.loadUserTeamMapping(teamId);
+    // Load user-to-team mapping and spaces
+    await Promise.all([
+      this.loadUserTeamMapping(teamId),
+      this.loadSpacesForTeam(teamId),
+    ]);
     
     // Collect unique space IDs and preload folders (safely handle missing task_location)
     const spaceIds = new Set<string>();
@@ -255,9 +299,10 @@ export class ClickUpService {
       await Promise.all(Array.from(spaceIds).map(spaceId => this.loadFoldersForSpace(spaceId)));
     }
     
-    // Map entries with folder names and team names (safely handle missing task_location)
+    // Map entries with folder names, space names, and team names (safely handle missing task_location)
     const entriesWithFolders = entries.map((entry) => {
       let folderName = "No Folder";
+      let spaceName = "No Space";
       
       const folderId = entry.task_location?.folder_id;
       const spaceId = entry.task_location?.space_id;
@@ -266,9 +311,13 @@ export class ClickUpService {
         folderName = this.folderCache.get(folderId) || "Unknown Folder";
       }
       
+      if (spaceId) {
+        spaceName = this.getSpaceName(spaceId);
+      }
+      
       const teamName = this.getUserTeam(entry.user.id);
       
-      return { ...entry, folderName, teamName };
+      return { ...entry, folderName, spaceName, teamName };
     });
     
     return entriesWithFolders;

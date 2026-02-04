@@ -46,6 +46,7 @@ export interface ClickUpTeam {
 export interface ClickUpTimeEntry {
   id: string;
   folderName: string;
+  spaceName: string;
   teamName: string;
   taskName: string;
   taskId?: string;
