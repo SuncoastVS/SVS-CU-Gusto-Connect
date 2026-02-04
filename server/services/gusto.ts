@@ -1,6 +1,7 @@
 const GUSTO_API_BASE = "https://api.gusto.com";
 const GUSTO_DEMO_API_BASE = "https://api.gusto-demo.com";
 const GUSTO_AUTH_BASE = "https://api.gusto.com/oauth";
+const GUSTO_DEMO_AUTH_BASE = "https://api.gusto-demo.com/oauth";
 const API_VERSION = "2024-04-01";
 
 export interface GustoTokens {
@@ -65,17 +66,21 @@ export class GustoService {
     return this.useDemo ? GUSTO_DEMO_API_BASE : GUSTO_API_BASE;
   }
 
+  private get authBase(): string {
+    return this.useDemo ? GUSTO_DEMO_AUTH_BASE : GUSTO_AUTH_BASE;
+  }
+
   getAuthorizationUrl(): string {
     const params = new URLSearchParams({
       client_id: this.clientId,
       redirect_uri: this.redirectUri,
       response_type: "code",
     });
-    return `${GUSTO_AUTH_BASE}/authorize?${params.toString()}`;
+    return `${this.authBase}/authorize?${params.toString()}`;
   }
 
   async exchangeCodeForTokens(code: string): Promise<GustoTokens> {
-    const response = await fetch(`${GUSTO_AUTH_BASE}/token`, {
+    const response = await fetch(`${this.authBase}/token`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
