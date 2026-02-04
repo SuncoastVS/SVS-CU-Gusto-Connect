@@ -566,7 +566,10 @@ export async function registerRoutes(
         useDemo,
       });
 
-      const employees = await gusto.getEmployees(config.gustoCompanyId);
+      const [employees, contractors] = await Promise.all([
+        gusto.getEmployees(config.gustoCompanyId),
+        gusto.getContractors(config.gustoCompanyId),
+      ]);
       
       const formattedEmployees = employees.map(emp => ({
         uuid: emp.uuid,
@@ -574,9 +577,23 @@ export async function registerRoutes(
         email: emp.email,
         jobUuid: emp.jobs?.[0]?.uuid || null,
         jobTitle: emp.jobs?.[0]?.title || null,
+        type: "Employee" as const,
       }));
 
-      res.json(formattedEmployees);
+      const formattedContractors = contractors.map(contractor => ({
+        uuid: contractor.uuid,
+        name: `${contractor.first_name} ${contractor.last_name}`,
+        email: contractor.email,
+        jobUuid: null,
+        jobTitle: "Contractor",
+        type: "Contractor" as const,
+      }));
+
+      const allPeople = [...formattedEmployees, ...formattedContractors].sort((a, b) => 
+        a.name.localeCompare(b.name)
+      );
+
+      res.json(allPeople);
     } catch (error) {
       console.error("Failed to fetch Gusto employees:", error);
       res.status(500).json({ error: "Failed to fetch employees" });

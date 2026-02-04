@@ -410,7 +410,7 @@ function GustoMappingsSection({ config }: { config?: Configuration | null }) {
                           <SelectItem value="none">Not Mapped</SelectItem>
                           {gustoEmployees.map((employee) => (
                             <SelectItem key={employee.uuid} value={employee.uuid}>
-                              {employee.name} ({employee.email})
+                              {employee.name} ({employee.email}){employee.type === "Contractor" ? " [Contractor]" : ""}
                             </SelectItem>
                           ))}
                         </SelectContent>

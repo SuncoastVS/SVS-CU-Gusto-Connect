@@ -27,6 +27,14 @@ export interface GustoEmployee {
   }>;
 }
 
+export interface GustoContractor {
+  uuid: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  type: string;
+}
+
 export interface GustoTimeSheet {
   entity_uuid: string;
   entity_type: "Employee";
@@ -210,6 +218,17 @@ export class GustoService {
     return this.apiRequest<GustoEmployee[]>(
       `/v1/companies/${companyUuid}/employees`
     );
+  }
+
+  async getContractors(companyUuid: string): Promise<GustoContractor[]> {
+    try {
+      return this.apiRequest<GustoContractor[]>(
+        `/v1/companies/${companyUuid}/contractors`
+      );
+    } catch (error) {
+      console.log("Contractors API not available, returning empty list:", error);
+      return [];
+    }
   }
 
   async getProjects(companyUuid: string): Promise<GustoProject[]> {

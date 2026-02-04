@@ -185,6 +185,7 @@ export interface GustoEmployee {
   email: string;
   jobUuid: string | null;
   jobTitle: string | null;
+  type?: "Employee" | "Contractor";
 }
 
 export async function fetchGustoEmployees(): Promise<GustoEmployee[]> {
