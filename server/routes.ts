@@ -516,6 +516,29 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/gusto/manual-connect", async (req, res) => {
+    try {
+      const { accessToken, companyId } = req.body;
+
+      if (!accessToken || !companyId) {
+        return res.status(400).json({ error: "Access token and company ID are required" });
+      }
+
+      await storage.upsertConfiguration({
+        gustoAccessToken: accessToken,
+        gustoRefreshToken: null,
+        gustoTokenExpiresAt: null,
+        gustoCompanyId: companyId,
+        gustoCompanyName: null,
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Failed to save Gusto credentials:", error);
+      res.status(500).json({ error: "Failed to save credentials" });
+    }
+  });
+
   app.get("/api/gusto/employees", async (req, res) => {
     try {
       const config = await storage.getConfiguration();

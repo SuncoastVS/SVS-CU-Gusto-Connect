@@ -38,9 +38,17 @@ import { toast } from "sonner";
 import { CheckCircle2, Loader2, AlertCircle, Plus, Trash2, Users, ExternalLink, Unlink } from "lucide-react";
 import type { Configuration } from "@shared/schema";
 
-function GustoConnectionCard({ config, onDisconnect }: { config?: Configuration; onDisconnect: () => void }) {
+function GustoConnectionCard({ config, onDisconnect, onSaveManualTokens }: { 
+  config?: Configuration; 
+  onDisconnect: () => void;
+  onSaveManualTokens: (accessToken: string, companyId: string) => Promise<void>;
+}) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const [manualAccessToken, setManualAccessToken] = useState("");
+  const [manualCompanyId, setManualCompanyId] = useState("");
+  const [isSavingManual, setIsSavingManual] = useState(false);
 
   const handleConnect = async () => {
     setIsConnecting(true);
@@ -63,6 +71,25 @@ function GustoConnectionCard({ config, onDisconnect }: { config?: Configuration;
       toast.error("Failed to disconnect from Gusto");
     } finally {
       setIsDisconnecting(false);
+    }
+  };
+
+  const handleSaveManualTokens = async () => {
+    if (!manualAccessToken.trim() || !manualCompanyId.trim()) {
+      toast.error("Please enter both access token and company ID");
+      return;
+    }
+    setIsSavingManual(true);
+    try {
+      await onSaveManualTokens(manualAccessToken.trim(), manualCompanyId.trim());
+      toast.success("Gusto credentials saved successfully");
+      setManualAccessToken("");
+      setManualCompanyId("");
+      setShowManualEntry(false);
+    } catch (error) {
+      toast.error("Failed to save Gusto credentials");
+    } finally {
+      setIsSavingManual(false);
     }
   };
 
@@ -93,6 +120,33 @@ function GustoConnectionCard({ config, onDisconnect }: { config?: Configuration;
               </p>
             </div>
           </div>
+        ) : showManualEntry ? (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="gusto-access-token">Access Token</Label>
+              <Input
+                id="gusto-access-token"
+                type="password"
+                placeholder="Enter your Gusto access token"
+                value={manualAccessToken}
+                onChange={(e) => setManualAccessToken(e.target.value)}
+                data-testid="input-gusto-access-token"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="gusto-company-id">Company ID</Label>
+              <Input
+                id="gusto-company-id"
+                placeholder="Enter your Gusto company ID"
+                value={manualCompanyId}
+                onChange={(e) => setManualCompanyId(e.target.value)}
+                data-testid="input-gusto-company-id"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              You can find these in your Gusto developer dashboard or API explorer.
+            </p>
+          </div>
         ) : (
           <div className="text-center py-4">
             <p className="text-sm text-muted-foreground mb-4">
@@ -101,44 +155,80 @@ function GustoConnectionCard({ config, onDisconnect }: { config?: Configuration;
           </div>
         )}
       </CardContent>
-      <CardFooter className="bg-muted/50 border-t px-6 py-4 flex justify-end">
+      <CardFooter className="bg-muted/50 border-t px-6 py-4 flex justify-between">
         {isConnected ? (
-          <Button
-            variant="destructive"
-            onClick={handleDisconnect}
-            disabled={isDisconnecting}
-            data-testid="button-disconnect-gusto"
-          >
-            {isDisconnecting ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Disconnecting...
-              </>
-            ) : (
-              <>
-                <Unlink className="w-4 h-4 mr-2" />
-                Disconnect
-              </>
-            )}
-          </Button>
+          <>
+            <div />
+            <Button
+              variant="destructive"
+              onClick={handleDisconnect}
+              disabled={isDisconnecting}
+              data-testid="button-disconnect-gusto"
+            >
+              {isDisconnecting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Disconnecting...
+                </>
+              ) : (
+                <>
+                  <Unlink className="w-4 h-4 mr-2" />
+                  Disconnect
+                </>
+              )}
+            </Button>
+          </>
+        ) : showManualEntry ? (
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => setShowManualEntry(false)}
+              data-testid="button-cancel-manual"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveManualTokens}
+              disabled={isSavingManual || !manualAccessToken.trim() || !manualCompanyId.trim()}
+              data-testid="button-save-gusto-tokens"
+            >
+              {isSavingManual ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Credentials"
+              )}
+            </Button>
+          </>
         ) : (
-          <Button
-            onClick={handleConnect}
-            disabled={isConnecting}
-            data-testid="button-connect-gusto"
-          >
-            {isConnecting ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Connecting...
-              </>
-            ) : (
-              <>
-                <ExternalLink className="w-4 h-4 mr-2" />
-                Connect to Gusto
-              </>
-            )}
-          </Button>
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => setShowManualEntry(true)}
+              data-testid="button-manual-entry"
+            >
+              Enter Token Manually
+            </Button>
+            <Button
+              onClick={handleConnect}
+              disabled={isConnecting}
+              data-testid="button-connect-gusto"
+            >
+              {isConnecting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Connecting...
+                </>
+              ) : (
+                <>
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Connect to Gusto
+                </>
+              )}
+            </Button>
+          </>
         )}
       </CardFooter>
     </Card>
@@ -424,6 +514,18 @@ export default function Settings() {
             <GustoConnectionCard 
               config={config} 
               onDisconnect={() => refetchConfig()}
+              onSaveManualTokens={async (accessToken, companyId) => {
+                const res = await fetch("/api/gusto/manual-connect", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ accessToken, companyId }),
+                });
+                if (!res.ok) {
+                  const error = await res.json();
+                  throw new Error(error.error || "Failed to save credentials");
+                }
+                refetchConfig();
+              }}
             />
           </TabsContent>
 
