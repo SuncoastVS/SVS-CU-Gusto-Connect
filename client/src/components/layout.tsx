@@ -27,7 +27,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold">
               C
             </div>
-            <span className="font-bold text-lg tracking-tight">Connector</span>
+            <span className="font-bold text-lg tracking-tight">SVS Connector</span>
           </div>
           <div className="mt-2 text-xs text-muted-foreground font-medium px-1">
             ClickUp ↔ Gusto
@@ -58,7 +58,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
       </aside>
-
       {/* Main Content */}
       <main className="flex-1 ml-64 p-8">
         <div className="max-w-6xl mx-auto">
