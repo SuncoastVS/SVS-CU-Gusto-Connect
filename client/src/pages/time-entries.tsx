@@ -659,6 +659,7 @@ export default function TimeEntries() {
                           <TableHead>Folder</TableHead>
                           <TableHead>Task Name</TableHead>
                           <TableHead>Hours</TableHead>
+                          <TableHead>Date</TableHead>
                           <TableHead>Team</TableHead>
                           <TableHead>User</TableHead>
                           <TableHead>Billable</TableHead>
@@ -694,6 +695,9 @@ export default function TimeEntries() {
                               <Badge variant="secondary" className="font-mono">
                                 {entry.duration.toFixed(2)} hrs
                               </Badge>
+                            </TableCell>
+                            <TableCell data-testid={`text-date-${entry.id}`}>
+                              {entry.start ? format(new Date(parseInt(entry.start)), "MM/dd/yy") : "—"}
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
