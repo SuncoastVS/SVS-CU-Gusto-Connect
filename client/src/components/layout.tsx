@@ -7,6 +7,7 @@ import {
   LogOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import svsLogo from "@assets/SVS-Logo-1_1770927983691.webp";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -23,10 +24,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Sidebar */}
       <aside className="w-64 bg-card border-r border-border flex flex-col fixed h-full z-10">
         <div className="p-6 border-b border-border">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold">
-              C
-            </div>
+          <div className="flex flex-col items-center gap-2">
+            <img src={svsLogo} alt="SVS Logo" className="h-10 object-contain" />
             <span className="font-bold text-lg tracking-tight">SVS Connector</span>
           </div>
           <div className="mt-2 text-xs text-muted-foreground font-medium px-1">
