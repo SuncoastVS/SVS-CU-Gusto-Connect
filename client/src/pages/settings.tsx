@@ -45,7 +45,7 @@ import type { Team, UserTeamMapping, ClickupGustoUserMapping, ClickupGustoSpaceM
 import { useState, useEffect } from "react";
 import { useSearch } from "wouter";
 import { toast } from "sonner";
-import { CheckCircle2, Loader2, AlertCircle, Plus, Trash2, Users, ExternalLink, Unlink, UserCheck, Layers } from "lucide-react";
+import { CheckCircle2, Loader2, AlertCircle, Plus, Trash2, Users, ExternalLink, Unlink, UserCheck, Layers, Eye, EyeOff } from "lucide-react";
 import type { Configuration } from "@shared/schema";
 
 function GustoConnectionCard({ config, onDisconnect, onSaveManualTokens }: { 
@@ -522,6 +522,7 @@ export default function Settings() {
 
   const [clickupTeams, setClickupTeams] = useState<ClickUpTeam[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
+  const [showApiKey, setShowApiKey] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
 
   const { data: teams = [] } = useQuery({
@@ -692,14 +693,25 @@ export default function Settings() {
               <CardContent className="space-y-4">
                 <div className="grid gap-2">
                   <Label htmlFor="clickupKey">API Key</Label>
-                  <Input
-                    id="clickupKey"
-                    type="password"
-                    placeholder="pk_..."
-                    value={formData.clickupApiKey}
-                    onChange={(e) => setFormData({ ...formData, clickupApiKey: e.target.value })}
-                    data-testid="input-clickup-key"
-                  />
+                  <div className="relative">
+                    <Input
+                      id="clickupKey"
+                      type={showApiKey ? "text" : "password"}
+                      placeholder="pk_..."
+                      value={formData.clickupApiKey}
+                      onChange={(e) => setFormData({ ...formData, clickupApiKey: e.target.value })}
+                      data-testid="input-clickup-key"
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      data-testid="button-toggle-api-key"
+                    >
+                      {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     Get your API key from ClickUp Settings → Apps → API Token
                   </p>
