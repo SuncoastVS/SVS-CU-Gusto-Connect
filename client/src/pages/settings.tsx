@@ -20,14 +20,13 @@ import {
   fetchConfiguration, 
   updateConfiguration, 
   testClickUpConnection,
+  testGustoConnection,
   fetchTeams,
   createTeam,
   deleteTeam,
   fetchClickUpUsers,
   fetchUserTeamMappings,
   updateUserTeamMapping,
-  getGustoAuthUrl,
-  disconnectGusto,
   fetchGustoEmployees,
   fetchGustoProjects,
   fetchClickUpSpaces,
@@ -45,205 +44,9 @@ import type { Team, UserTeamMapping, ClickupGustoUserMapping, ClickupGustoSpaceM
 import { useState, useEffect } from "react";
 import { useSearch } from "wouter";
 import { toast } from "sonner";
-import { CheckCircle2, Loader2, AlertCircle, Plus, Trash2, Users, ExternalLink, Unlink, UserCheck, Layers, Eye, EyeOff } from "lucide-react";
+import { CheckCircle2, Loader2, AlertCircle, Plus, Trash2, Users, UserCheck, Layers, Eye, EyeOff } from "lucide-react";
 import type { Configuration } from "@shared/schema";
 
-function GustoConnectionCard({ config, onDisconnect, onSaveManualTokens }: { 
-  config?: Configuration; 
-  onDisconnect: () => void;
-  onSaveManualTokens: (accessToken: string, companyId: string) => Promise<void>;
-}) {
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [isDisconnecting, setIsDisconnecting] = useState(false);
-  const [showManualEntry, setShowManualEntry] = useState(false);
-  const [manualAccessToken, setManualAccessToken] = useState("");
-  const [manualCompanyId, setManualCompanyId] = useState("");
-  const [isSavingManual, setIsSavingManual] = useState(false);
-
-  const handleConnect = async () => {
-    setIsConnecting(true);
-    try {
-      const { url } = await getGustoAuthUrl();
-      window.location.href = url;
-    } catch (error) {
-      toast.error("Failed to start Gusto connection");
-      setIsConnecting(false);
-    }
-  };
-
-  const handleDisconnect = async () => {
-    setIsDisconnecting(true);
-    try {
-      await disconnectGusto();
-      toast.success("Disconnected from Gusto");
-      onDisconnect();
-    } catch (error) {
-      toast.error("Failed to disconnect from Gusto");
-    } finally {
-      setIsDisconnecting(false);
-    }
-  };
-
-  const handleSaveManualTokens = async () => {
-    if (!manualAccessToken.trim() || !manualCompanyId.trim()) {
-      toast.error("Please enter both access token and company ID");
-      return;
-    }
-    setIsSavingManual(true);
-    try {
-      await onSaveManualTokens(manualAccessToken.trim(), manualCompanyId.trim());
-      toast.success("Gusto credentials saved successfully");
-      setManualAccessToken("");
-      setManualCompanyId("");
-      setShowManualEntry(false);
-    } catch (error) {
-      toast.error("Failed to save Gusto credentials");
-    } finally {
-      setIsSavingManual(false);
-    }
-  };
-
-  const isConnected = config?.gustoAccessToken && config.gustoCompanyId;
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Gusto Integration</CardTitle>
-            <CardDescription>Connect to Gusto to sync time entries for payroll.</CardDescription>
-          </div>
-          {isConnected && (
-            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1">
-              <CheckCircle2 className="w-3 h-3" />
-              Connected
-            </Badge>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isConnected ? (
-          <div className="space-y-4">
-            <div className="rounded-lg bg-muted/50 p-4">
-              <p className="text-sm text-muted-foreground">
-                Connected to Gusto company: <span className="font-medium text-foreground">{config.gustoCompanyId}</span>
-              </p>
-            </div>
-          </div>
-        ) : showManualEntry ? (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="gusto-access-token">Access Token</Label>
-              <Input
-                id="gusto-access-token"
-                type="password"
-                placeholder="Enter your Gusto access token"
-                value={manualAccessToken}
-                onChange={(e) => setManualAccessToken(e.target.value)}
-                data-testid="input-gusto-access-token"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="gusto-company-id">Company ID</Label>
-              <Input
-                id="gusto-company-id"
-                placeholder="Enter your Gusto company ID"
-                value={manualCompanyId}
-                onChange={(e) => setManualCompanyId(e.target.value)}
-                data-testid="input-gusto-company-id"
-              />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              You can find these in your Gusto developer dashboard or API explorer.
-            </p>
-          </div>
-        ) : (
-          <div className="text-center py-4">
-            <p className="text-sm text-muted-foreground mb-4">
-              Connect your Gusto account to sync ClickUp time entries with your payroll system.
-            </p>
-          </div>
-        )}
-      </CardContent>
-      <CardFooter className="bg-muted/50 border-t px-6 py-4 flex justify-between">
-        {isConnected ? (
-          <>
-            <div />
-            <Button
-              variant="destructive"
-              onClick={handleDisconnect}
-              disabled={isDisconnecting}
-              data-testid="button-disconnect-gusto"
-            >
-              {isDisconnecting ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Disconnecting...
-                </>
-              ) : (
-                <>
-                  <Unlink className="w-4 h-4 mr-2" />
-                  Disconnect
-                </>
-              )}
-            </Button>
-          </>
-        ) : showManualEntry ? (
-          <>
-            <Button
-              variant="ghost"
-              onClick={() => setShowManualEntry(false)}
-              data-testid="button-cancel-manual"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSaveManualTokens}
-              disabled={isSavingManual || !manualAccessToken.trim() || !manualCompanyId.trim()}
-              data-testid="button-save-gusto-tokens"
-            >
-              {isSavingManual ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Save Credentials"
-              )}
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button
-              variant="ghost"
-              onClick={() => setShowManualEntry(true)}
-              data-testid="button-manual-entry"
-            >
-              Enter Token Manually
-            </Button>
-            <Button
-              onClick={handleConnect}
-              disabled={isConnecting}
-              data-testid="button-connect-gusto"
-            >
-              {isConnecting ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Connecting...
-                </>
-              ) : (
-                <>
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Connect to Gusto
-                </>
-              )}
-            </Button>
-          </>
-        )}
-      </CardFooter>
-    </Card>
-  );
-}
 
 function GustoMappingsSection({ config }: { config?: Configuration | null }) {
   const queryClient = useQueryClient();
@@ -503,6 +306,10 @@ export default function Settings() {
   const [formData, setFormData] = useState({
     clickupApiKey: "",
     clickupTeamId: "",
+    gustoClientId: "",
+    gustoClientSecret: "",
+    gustoAccessToken: "",
+    gustoCompanyId: "",
     syncEnabled: true,
     syncFrequency: "daily",
     syncTime: "00:00",
@@ -522,7 +329,10 @@ export default function Settings() {
 
   const [clickupTeams, setClickupTeams] = useState<ClickUpTeam[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
+  const [gustoConnectionStatus, setGustoConnectionStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
   const [showApiKey, setShowApiKey] = useState(false);
+  const [showGustoClientSecret, setShowGustoClientSecret] = useState(false);
+  const [showGustoAccessToken, setShowGustoAccessToken] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
 
   const { data: teams = [] } = useQuery({
@@ -546,12 +356,19 @@ export default function Settings() {
       setFormData({
         clickupApiKey: config.clickupApiKey || "",
         clickupTeamId: config.clickupTeamId || "",
+        gustoClientId: config.gustoClientId || "",
+        gustoClientSecret: config.gustoClientSecret || "",
+        gustoAccessToken: config.gustoAccessToken || "",
+        gustoCompanyId: config.gustoCompanyId || "",
         syncEnabled: config.syncEnabled ?? true,
         syncFrequency: config.syncFrequency || "daily",
         syncTime: config.syncTime || "00:00",
       });
       if (config.clickupApiKey) {
         setConnectionStatus("success");
+      }
+      if (config.gustoAccessToken && config.gustoCompanyId) {
+        setGustoConnectionStatus("success");
       }
     }
   }, [config]);
@@ -631,6 +448,35 @@ export default function Settings() {
   const handleTestConnection = async () => {
     await updateMutation.mutateAsync(formData);
     testConnectionMutation.mutate();
+  };
+
+  const testGustoMutation = useMutation({
+    mutationFn: testGustoConnection,
+    onMutate: () => {
+      setGustoConnectionStatus("testing");
+    },
+    onSuccess: (result) => {
+      if (result.success) {
+        setGustoConnectionStatus("success");
+        toast.success(`Connected! Found ${result.employees.length} employee(s).`);
+      } else {
+        setGustoConnectionStatus("error");
+        toast.error("Connection failed");
+      }
+    },
+    onError: (error: Error) => {
+      setGustoConnectionStatus("error");
+      toast.error(error.message);
+    },
+  });
+
+  const handleSaveGusto = async () => {
+    updateMutation.mutate(formData);
+  };
+
+  const handleTestGusto = async () => {
+    await updateMutation.mutateAsync(formData);
+    testGustoMutation.mutate();
   };
 
   const handleAddTeam = () => {
@@ -780,22 +626,130 @@ export default function Settings() {
               </CardFooter>
             </Card>
 
-            <GustoConnectionCard 
-              config={config ?? undefined} 
-              onDisconnect={() => refetchConfig()}
-              onSaveManualTokens={async (accessToken, companyId) => {
-                const res = await fetch("/api/gusto/manual-connect", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ accessToken, companyId }),
-                });
-                if (!res.ok) {
-                  const error = await res.json();
-                  throw new Error(error.error || "Failed to save credentials");
-                }
-                refetchConfig();
-              }}
-            />
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Gusto Configuration</CardTitle>
+                    <CardDescription>Connect to Gusto to sync time entries for payroll.</CardDescription>
+                  </div>
+                  {gustoConnectionStatus === "success" && (
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Connected
+                    </Badge>
+                  )}
+                  {gustoConnectionStatus === "error" && (
+                    <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      Error
+                    </Badge>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="gustoClientId">Client ID</Label>
+                  <Input
+                    id="gustoClientId"
+                    placeholder="Your Gusto app Client ID"
+                    value={formData.gustoClientId}
+                    onChange={(e) => setFormData({ ...formData, gustoClientId: e.target.value })}
+                    data-testid="input-gusto-client-id"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Found in your Gusto Developer Portal under your application settings.
+                  </p>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="gustoClientSecret">Client Secret</Label>
+                  <div className="relative">
+                    <Input
+                      id="gustoClientSecret"
+                      type={showGustoClientSecret ? "text" : "password"}
+                      placeholder="Your Gusto app Client Secret"
+                      value={formData.gustoClientSecret}
+                      onChange={(e) => setFormData({ ...formData, gustoClientSecret: e.target.value })}
+                      data-testid="input-gusto-client-secret"
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowGustoClientSecret(!showGustoClientSecret)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      data-testid="button-toggle-gusto-secret"
+                    >
+                      {showGustoClientSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="gustoAccessToken">Access Token</Label>
+                  <div className="relative">
+                    <Input
+                      id="gustoAccessToken"
+                      type={showGustoAccessToken ? "text" : "password"}
+                      placeholder="Your Gusto access token"
+                      value={formData.gustoAccessToken}
+                      onChange={(e) => setFormData({ ...formData, gustoAccessToken: e.target.value })}
+                      data-testid="input-gusto-access-token"
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowGustoAccessToken(!showGustoAccessToken)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      data-testid="button-toggle-gusto-token"
+                    >
+                      {showGustoAccessToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Get this from the Gusto Developer Portal API explorer or OAuth flow.
+                  </p>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="gustoCompanyId">Company ID</Label>
+                  <Input
+                    id="gustoCompanyId"
+                    placeholder="Your Gusto company UUID"
+                    value={formData.gustoCompanyId}
+                    onChange={(e) => setFormData({ ...formData, gustoCompanyId: e.target.value })}
+                    data-testid="input-gusto-company-id"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    The UUID of your Gusto company (found in developer portal or via API).
+                  </p>
+                </div>
+              </CardContent>
+              <CardFooter className="bg-muted/50 border-t px-6 py-4 flex justify-between">
+                <Button
+                  variant="outline"
+                  onClick={handleTestGusto}
+                  disabled={!formData.gustoAccessToken || !formData.gustoCompanyId || testGustoMutation.isPending || updateMutation.isPending}
+                  data-testid="button-test-gusto"
+                >
+                  {testGustoMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Testing...
+                    </>
+                  ) : (
+                    "Test Connection"
+                  )}
+                </Button>
+                <Button
+                  onClick={handleSaveGusto}
+                  disabled={updateMutation.isPending}
+                  data-testid="button-save-gusto"
+                >
+                  {updateMutation.isPending ? "Saving..." : "Save"}
+                </Button>
+              </CardFooter>
+            </Card>
           </TabsContent>
 
           <TabsContent value="gusto-mappings" className="space-y-6">

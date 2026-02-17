@@ -160,6 +160,17 @@ export async function updateUserTeamMapping(
   return res.json();
 }
 
+export async function testGustoConnection(): Promise<{ success: boolean; employees: { name: string; email: string }[] }> {
+  const res = await fetch(`${API_BASE}/gusto/test`, {
+    method: "POST",
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || "Connection test failed");
+  }
+  return res.json();
+}
+
 export async function getGustoAuthUrl(): Promise<{ url: string }> {
   const res = await fetch(`${API_BASE}/gusto/auth-url`);
   if (!res.ok) {

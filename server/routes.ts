@@ -413,11 +413,17 @@ export async function registerRoutes(
     return `${protocol}://${host}/api/gusto/callback`;
   };
 
+  const getGustoCredentials = async () => {
+    const config = await storage.getConfiguration();
+    const clientId = config?.gustoClientId || process.env.GUSTO_CLIENT_ID;
+    const clientSecret = config?.gustoClientSecret || process.env.GUSTO_CLIENT_SECRET;
+    const useDemo = process.env.GUSTO_USE_DEMO === "true";
+    return { clientId, clientSecret, useDemo, config };
+  };
+
   app.get("/api/gusto/auth-url", async (req, res) => {
     try {
-      const clientId = process.env.GUSTO_CLIENT_ID;
-      const clientSecret = process.env.GUSTO_CLIENT_SECRET;
-      const useDemo = process.env.GUSTO_USE_DEMO === "true";
+      const { clientId, clientSecret, useDemo } = await getGustoCredentials();
 
       if (!clientId || !clientSecret) {
         return res.status(500).json({ error: "Gusto credentials not configured" });
@@ -450,9 +456,7 @@ export async function registerRoutes(
         return res.redirect("/settings?gusto_error=No authorization code received");
       }
 
-      const clientId = process.env.GUSTO_CLIENT_ID;
-      const clientSecret = process.env.GUSTO_CLIENT_SECRET;
-      const useDemo = process.env.GUSTO_USE_DEMO === "true";
+      const { clientId, clientSecret, useDemo } = await getGustoCredentials();
 
       if (!clientId || !clientSecret) {
         return res.redirect("/settings?gusto_error=Gusto credentials not configured");
@@ -542,17 +546,46 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/gusto/test", async (req, res) => {
+    try {
+      const { clientId, clientSecret, useDemo, config } = await getGustoCredentials();
+
+      if (!config?.gustoAccessToken || !config?.gustoCompanyId) {
+        return res.status(400).json({ error: "Gusto access token and company ID are required" });
+      }
+
+      if (!clientId || !clientSecret) {
+        return res.status(400).json({ error: "Gusto Client ID and Client Secret are required" });
+      }
+
+      const gusto = new GustoService({
+        clientId,
+        clientSecret,
+        redirectUri: getGustoRedirectUri(req),
+        accessToken: config.gustoAccessToken,
+        useDemo,
+      });
+
+      const employees = await gusto.getEmployees(config.gustoCompanyId);
+      const formatted = employees.map(emp => ({
+        name: `${emp.first_name} ${emp.last_name}`,
+        email: emp.email,
+      }));
+
+      res.json({ success: true, employees: formatted });
+    } catch (error) {
+      console.error("Gusto test connection failed:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Connection test failed" });
+    }
+  });
+
   app.get("/api/gusto/employees", async (req, res) => {
     try {
-      const config = await storage.getConfiguration();
+      const { clientId, clientSecret, useDemo, config } = await getGustoCredentials();
       
       if (!config?.gustoAccessToken || !config?.gustoCompanyId) {
         return res.status(400).json({ error: "Gusto not connected" });
       }
-
-      const clientId = process.env.GUSTO_CLIENT_ID;
-      const clientSecret = process.env.GUSTO_CLIENT_SECRET;
-      const useDemo = process.env.GUSTO_USE_DEMO === "true";
 
       if (!clientId || !clientSecret) {
         return res.status(500).json({ error: "Gusto credentials not configured" });
@@ -602,15 +635,11 @@ export async function registerRoutes(
 
   app.post("/api/gusto/sync-time", async (req, res) => {
     try {
-      const config = await storage.getConfiguration();
+      const { clientId, clientSecret, useDemo, config } = await getGustoCredentials();
       
       if (!config?.gustoAccessToken || !config?.gustoCompanyId) {
         return res.status(400).json({ error: "Gusto not connected" });
       }
-
-      const clientId = process.env.GUSTO_CLIENT_ID;
-      const clientSecret = process.env.GUSTO_CLIENT_SECRET;
-      const useDemo = process.env.GUSTO_USE_DEMO === "true";
 
       if (!clientId || !clientSecret) {
         return res.status(500).json({ error: "Gusto credentials not configured" });
@@ -644,15 +673,11 @@ export async function registerRoutes(
 
   app.get("/api/gusto/projects", async (req, res) => {
     try {
-      const config = await storage.getConfiguration();
+      const { clientId, clientSecret, useDemo, config } = await getGustoCredentials();
       
       if (!config?.gustoAccessToken || !config?.gustoCompanyId) {
         return res.status(400).json({ error: "Gusto not connected" });
       }
-
-      const clientId = process.env.GUSTO_CLIENT_ID;
-      const clientSecret = process.env.GUSTO_CLIENT_SECRET;
-      const useDemo = process.env.GUSTO_USE_DEMO === "true";
 
       if (!clientId || !clientSecret) {
         return res.status(500).json({ error: "Gusto credentials not configured" });

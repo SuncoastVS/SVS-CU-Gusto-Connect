@@ -21,6 +21,8 @@ export const configurations = pgTable("configurations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clickupApiKey: text("clickup_api_key"),
   clickupTeamId: text("clickup_team_id"),
+  gustoClientId: text("gusto_client_id"),
+  gustoClientSecret: text("gusto_client_secret"),
   gustoAccessToken: text("gusto_access_token"),
   gustoRefreshToken: text("gusto_refresh_token"),
   gustoTokenExpiresAt: timestamp("gusto_token_expires_at"),
