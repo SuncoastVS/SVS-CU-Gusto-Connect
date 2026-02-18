@@ -1,6 +1,6 @@
 const GUSTO_API_BASE = "https://api.gusto.com";
 const GUSTO_DEMO_API_BASE = "https://api.gusto-demo.com";
-const API_VERSION = "2024-04-01";
+const API_VERSION = "2025-06-15";
 
 export interface GustoTokenInfo {
   scope: string;
@@ -68,7 +68,7 @@ export class GustoService {
     useDemo?: boolean;
   }) {
     this.accessToken = options.accessToken;
-    this.useDemo = options.useDemo ?? true;
+    this.useDemo = options.useDemo ?? false;
   }
 
   private get apiBase(): string {

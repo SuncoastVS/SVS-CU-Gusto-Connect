@@ -408,7 +408,7 @@ export async function registerRoutes(
     }
     const gusto = new GustoService({
       accessToken: config.gustoAccessToken,
-      useDemo: true,
+      useDemo: false,
     });
     return { gusto, config };
   };
