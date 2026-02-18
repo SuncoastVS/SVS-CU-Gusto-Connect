@@ -686,7 +686,7 @@ export default function Settings() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="gustoAccessToken">Access Token</Label>
+                  <Label htmlFor="gustoAccessToken">Access Token <span className="text-muted-foreground font-normal">(Optional)</span></Label>
                   <div className="relative">
                     <Input
                       id="gustoAccessToken"
@@ -712,7 +712,7 @@ export default function Settings() {
                 </div>
 
                 <div className="grid gap-2">
-                  <Label htmlFor="gustoCompanyId">Company ID</Label>
+                  <Label htmlFor="gustoCompanyId">Company ID <span className="text-muted-foreground font-normal">(Optional)</span></Label>
                   <Input
                     id="gustoCompanyId"
                     placeholder="Your Gusto company UUID"
