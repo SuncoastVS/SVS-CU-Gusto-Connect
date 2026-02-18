@@ -458,7 +458,10 @@ export default function Settings() {
     onSuccess: (result) => {
       if (result.success) {
         setGustoConnectionStatus("success");
-        toast.success(`Connected! Found ${result.employees.length} employee(s).`);
+        const msg = result.companyName
+          ? `Connected to ${result.companyName}!`
+          : "Access token is valid!";
+        toast.success(msg);
       } else {
         setGustoConnectionStatus("error");
         toast.error("Connection failed");
@@ -729,7 +732,7 @@ export default function Settings() {
                 <Button
                   variant="outline"
                   onClick={handleTestGusto}
-                  disabled={!formData.gustoAccessToken || !formData.gustoCompanyId || testGustoMutation.isPending || updateMutation.isPending}
+                  disabled={!formData.gustoAccessToken || testGustoMutation.isPending || updateMutation.isPending}
                   data-testid="button-test-gusto"
                 >
                   {testGustoMutation.isPending ? (

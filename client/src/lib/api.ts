@@ -160,7 +160,7 @@ export async function updateUserTeamMapping(
   return res.json();
 }
 
-export async function testGustoConnection(): Promise<{ success: boolean; employees: { name: string; email: string }[] }> {
+export async function testGustoConnection(): Promise<{ success: boolean; scope?: string; companyUuid?: string; companyName?: string }> {
   const res = await fetch(`${API_BASE}/gusto/test`, {
     method: "POST",
   });
@@ -169,25 +169,6 @@ export async function testGustoConnection(): Promise<{ success: boolean; employe
     throw new Error(error.error || "Connection test failed");
   }
   return res.json();
-}
-
-export async function getGustoAuthUrl(): Promise<{ url: string }> {
-  const res = await fetch(`${API_BASE}/gusto/auth-url`);
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.error || "Failed to get auth URL");
-  }
-  return res.json();
-}
-
-export async function disconnectGusto(): Promise<void> {
-  const res = await fetch(`${API_BASE}/gusto/disconnect`, {
-    method: "POST",
-  });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.error || "Failed to disconnect");
-  }
 }
 
 export interface GustoEmployee {

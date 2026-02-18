@@ -1,13 +1,17 @@
 const GUSTO_API_BASE = "https://api.gusto.com";
 const GUSTO_DEMO_API_BASE = "https://api.gusto-demo.com";
-const GUSTO_AUTH_BASE = "https://api.gusto.com/oauth";
-const GUSTO_DEMO_AUTH_BASE = "https://api.gusto-demo.com/oauth";
 const API_VERSION = "2024-04-01";
 
-export interface GustoTokens {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: Date;
+export interface GustoTokenInfo {
+  scope: string;
+  resource: {
+    type: string;
+    uuid: string;
+  };
+  resource_owner: {
+    type: string;
+    uuid: string;
+  };
 }
 
 export interface GustoCompany {
@@ -56,106 +60,19 @@ export interface GustoProject {
 }
 
 export class GustoService {
-  private clientId: string;
-  private clientSecret: string;
-  private redirectUri: string;
-  private accessToken?: string;
+  private accessToken: string;
   private useDemo: boolean;
 
   constructor(options: {
-    clientId: string;
-    clientSecret: string;
-    redirectUri: string;
-    accessToken?: string;
+    accessToken: string;
     useDemo?: boolean;
   }) {
-    this.clientId = options.clientId;
-    this.clientSecret = options.clientSecret;
-    this.redirectUri = options.redirectUri;
     this.accessToken = options.accessToken;
-    this.useDemo = options.useDemo ?? false;
+    this.useDemo = options.useDemo ?? true;
   }
 
   private get apiBase(): string {
     return this.useDemo ? GUSTO_DEMO_API_BASE : GUSTO_API_BASE;
-  }
-
-  private get authBase(): string {
-    return this.useDemo ? GUSTO_DEMO_AUTH_BASE : GUSTO_AUTH_BASE;
-  }
-
-  getAuthorizationUrl(): string {
-    const params = new URLSearchParams({
-      client_id: this.clientId,
-      redirect_uri: this.redirectUri,
-      response_type: "code",
-    });
-    return `${this.authBase}/authorize?${params.toString()}`;
-  }
-
-  async exchangeCodeForTokens(code: string): Promise<GustoTokens> {
-    const response = await fetch(`${this.authBase}/token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        grant_type: "authorization_code",
-        code,
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
-        redirect_uri: this.redirectUri,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      console.error("Gusto token exchange failed:", error);
-      throw new Error(`Failed to exchange code for tokens: ${response.status}`);
-    }
-
-    const data = await response.json();
-    
-    const expiresAt = new Date();
-    expiresAt.setSeconds(expiresAt.getSeconds() + (data.expires_in || 7200));
-
-    return {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      expiresAt,
-    };
-  }
-
-  async refreshTokens(refreshToken: string): Promise<GustoTokens> {
-    const response = await fetch(`${GUSTO_AUTH_BASE}/token`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        grant_type: "refresh_token",
-        refresh_token: refreshToken,
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      console.error("Gusto token refresh failed:", error);
-      throw new Error(`Failed to refresh tokens: ${response.status}`);
-    }
-
-    const data = await response.json();
-    
-    const expiresAt = new Date();
-    expiresAt.setSeconds(expiresAt.getSeconds() + (data.expires_in || 7200));
-
-    return {
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      expiresAt,
-    };
   }
 
   private async apiRequest<T>(
@@ -171,6 +88,7 @@ export class GustoService {
       headers: {
         Authorization: `Bearer ${this.accessToken}`,
         "X-Gusto-API-Version": API_VERSION,
+        Accept: "application/json",
         "Content-Type": "application/json",
         ...options.headers,
       },
@@ -185,33 +103,12 @@ export class GustoService {
     return response.json();
   }
 
-  async getCurrentUser(): Promise<{ email: string }> {
-    return this.apiRequest("/v1/me");
+  async getTokenInfo(): Promise<GustoTokenInfo> {
+    return this.apiRequest("/v1/token_info");
   }
 
-  async getCompanies(): Promise<GustoCompany[]> {
-    const user = await this.apiRequest<{ roles: { entities: { uuid: string; type: string }[] }[] }>("/v1/me");
-    
-    const companies: GustoCompany[] = [];
-    for (const role of user.roles || []) {
-      for (const entity of role.entities || []) {
-        if (entity.type === "Company") {
-          try {
-            const company = await this.apiRequest<{ uuid: string; name: string }>(
-              `/v1/companies/${entity.uuid}`
-            );
-            companies.push({
-              uuid: company.uuid,
-              name: company.name,
-            });
-          } catch (e) {
-            console.error(`Failed to fetch company ${entity.uuid}:`, e);
-          }
-        }
-      }
-    }
-    
-    return companies;
+  async getCompany(companyUuid: string): Promise<GustoCompany> {
+    return this.apiRequest<GustoCompany>(`/v1/companies/${companyUuid}`);
   }
 
   async getEmployees(companyUuid: string): Promise<GustoEmployee[]> {
