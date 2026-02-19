@@ -28,271 +28,18 @@ import {
   fetchUserTeamMappings,
   updateUserTeamMapping,
   fetchGustoEmployees,
-  fetchGustoProjects,
-  fetchClickUpSpaces,
   fetchClickupGustoUserMappings,
   saveClickupGustoUserMapping,
-  fetchClickupGustoSpaceMappings,
-  saveClickupGustoSpaceMapping,
   type ClickUpTeam,
   type ClickUpUser,
   type GustoEmployee,
-  type GustoProject,
-  type ClickUpSpace,
 } from "@/lib/api";
-import type { Team, UserTeamMapping, ClickupGustoUserMapping, ClickupGustoSpaceMapping } from "@shared/schema";
+import type { Team, UserTeamMapping, ClickupGustoUserMapping } from "@shared/schema";
 import { useState, useEffect } from "react";
 import { useSearch } from "wouter";
 import { toast } from "sonner";
 import { CheckCircle2, Loader2, AlertCircle, Plus, Trash2, Users, UserCheck, Layers, Eye, EyeOff } from "lucide-react";
 import type { Configuration } from "@shared/schema";
-
-
-function GustoMappingsSection({ config }: { config?: Configuration | null }) {
-  const queryClient = useQueryClient();
-  
-  const { data: gustoEmployees = [], isLoading: loadingEmployees } = useQuery({
-    queryKey: ["gustoEmployees"],
-    queryFn: fetchGustoEmployees,
-    enabled: !!config?.gustoAccessToken && !!config?.gustoCompanyId,
-  });
-
-  const { data: gustoProjects = [], isLoading: loadingProjects } = useQuery({
-    queryKey: ["gustoProjects"],
-    queryFn: fetchGustoProjects,
-    enabled: !!config?.gustoAccessToken && !!config?.gustoCompanyId,
-  });
-
-  const { data: clickupUsers = [], isLoading: loadingClickupUsers } = useQuery({
-    queryKey: ["clickupUsers"],
-    queryFn: fetchClickUpUsers,
-    enabled: !!config?.clickupApiKey && !!config?.clickupTeamId,
-  });
-
-  const { data: clickupSpaces = [], isLoading: loadingClickupSpaces } = useQuery({
-    queryKey: ["clickupSpaces"],
-    queryFn: fetchClickUpSpaces,
-    enabled: !!config?.clickupApiKey && !!config?.clickupTeamId,
-  });
-
-  const { data: userMappings = [], refetch: refetchUserMappings } = useQuery({
-    queryKey: ["clickupGustoUserMappings"],
-    queryFn: fetchClickupGustoUserMappings,
-  });
-
-  const { data: spaceMappings = [], refetch: refetchSpaceMappings } = useQuery({
-    queryKey: ["clickupGustoSpaceMappings"],
-    queryFn: fetchClickupGustoSpaceMappings,
-  });
-
-  const getUserGustoMapping = (clickupUserId: number): string | null => {
-    const mapping = userMappings.find(m => m.clickupUserId === clickupUserId);
-    return mapping?.gustoEmployeeId || null;
-  };
-
-  const getSpaceGustoMapping = (clickupSpaceId: string): string | null => {
-    const mapping = spaceMappings.find(m => m.clickupSpaceId === clickupSpaceId);
-    return mapping?.gustoProjectId || null;
-  };
-
-  const handleUserMappingChange = async (
-    user: { id: number; username: string; email: string },
-    gustoEmployeeId: string
-  ) => {
-    const gustoEmployee = gustoEmployees.find(e => e.uuid === gustoEmployeeId);
-    try {
-      await saveClickupGustoUserMapping({
-        clickupUserId: user.id,
-        clickupUsername: user.username,
-        clickupEmail: user.email,
-        gustoEmployeeId: gustoEmployeeId === "none" ? null : gustoEmployeeId,
-        gustoEmployeeName: gustoEmployee?.name || null,
-        gustoEmployeeEmail: gustoEmployee?.email || null,
-      });
-      await refetchUserMappings();
-      toast.success(`User mapping updated for ${user.username}`);
-    } catch (error) {
-      toast.error("Failed to save user mapping");
-    }
-  };
-
-  const handleSpaceMappingChange = async (
-    space: { id: string; name: string },
-    gustoProjectId: string
-  ) => {
-    const gustoProject = gustoProjects.find(p => p.uuid === gustoProjectId);
-    try {
-      await saveClickupGustoSpaceMapping({
-        clickupSpaceId: space.id,
-        clickupSpaceName: space.name,
-        gustoProjectId: gustoProjectId === "none" ? null : gustoProjectId,
-        gustoProjectName: gustoProject?.name || null,
-      });
-      await refetchSpaceMappings();
-      toast.success(`Space mapping updated for ${space.name}`);
-    } catch (error) {
-      toast.error("Failed to save space mapping");
-    }
-  };
-
-  const isGustoConnected = !!config?.gustoAccessToken && !!config?.gustoCompanyId;
-  const isClickupConnected = !!config?.clickupApiKey && !!config?.clickupTeamId;
-
-  if (!isGustoConnected || !isClickupConnected) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Gusto Mappings</CardTitle>
-          <CardDescription>Map ClickUp users and spaces to Gusto employees and projects.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8">
-            <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">
-              {!isClickupConnected && !isGustoConnected 
-                ? "Please connect both ClickUp and Gusto in the Integrations tab first."
-                : !isClickupConnected 
-                ? "Please connect ClickUp in the Integrations tab first."
-                : "Please connect Gusto in the Integrations tab first."
-              }
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const isLoading = loadingEmployees || loadingClickupUsers || loadingClickupSpaces;
-
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <UserCheck className="w-5 h-5" />
-            User Mapping
-          </CardTitle>
-          <CardDescription>
-            Map ClickUp users to Gusto employees. This allows time entries to sync correctly.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loadingClickupUsers || loadingEmployees ? (
-            <div className="text-center py-8">
-              <Loader2 className="w-8 h-8 text-muted-foreground mx-auto mb-2 animate-spin" />
-              <p className="text-muted-foreground">Loading users...</p>
-            </div>
-          ) : clickupUsers.length === 0 ? (
-            <div className="text-center py-8">
-              <AlertCircle className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-muted-foreground">No ClickUp users found.</p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ClickUp User</TableHead>
-                  <TableHead>ClickUp Email</TableHead>
-                  <TableHead className="w-[250px]">Gusto Employee</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {clickupUsers.map((user) => (
-                  <TableRow key={user.id} data-testid={`row-user-mapping-${user.id}`}>
-                    <TableCell className="font-medium">{user.username}</TableCell>
-                    <TableCell className="text-muted-foreground">{user.email}</TableCell>
-                    <TableCell>
-                      <Select
-                        value={getUserGustoMapping(user.id) || "none"}
-                        onValueChange={(value) => handleUserMappingChange(user, value)}
-                      >
-                        <SelectTrigger data-testid={`select-gusto-employee-${user.id}`}>
-                          <SelectValue placeholder="Select employee..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Not Mapped</SelectItem>
-                          {gustoEmployees.map((employee) => (
-                            <SelectItem key={employee.uuid} value={employee.uuid}>
-                              {employee.name} ({employee.email}){employee.type === "Contractor" ? " [Contractor]" : ""}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Layers className="w-5 h-5" />
-            Space to Project Mapping
-          </CardTitle>
-          <CardDescription>
-            Map ClickUp spaces to Gusto projects for job costing.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loadingClickupSpaces || loadingProjects ? (
-            <div className="text-center py-8">
-              <Loader2 className="w-8 h-8 text-muted-foreground mx-auto mb-2 animate-spin" />
-              <p className="text-muted-foreground">Loading spaces and projects...</p>
-            </div>
-          ) : clickupSpaces.length === 0 ? (
-            <div className="text-center py-8">
-              <AlertCircle className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-muted-foreground">No ClickUp spaces found.</p>
-            </div>
-          ) : gustoProjects.length === 0 ? (
-            <div className="text-center py-8">
-              <AlertCircle className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-muted-foreground">No Gusto projects found. Projects may need to be created in Gusto first.</p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ClickUp Space</TableHead>
-                  <TableHead className="w-[250px]">Gusto Project</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {clickupSpaces.map((space) => (
-                  <TableRow key={space.id} data-testid={`row-space-mapping-${space.id}`}>
-                    <TableCell className="font-medium">{space.name}</TableCell>
-                    <TableCell>
-                      <Select
-                        value={getSpaceGustoMapping(space.id) || "none"}
-                        onValueChange={(value) => handleSpaceMappingChange(space, value)}
-                      >
-                        <SelectTrigger data-testid={`select-gusto-project-${space.id}`}>
-                          <SelectValue placeholder="Select project..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Not Mapped</SelectItem>
-                          {gustoProjects.map((project) => (
-                            <SelectItem key={project.uuid} value={project.uuid}>
-                              {project.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
 
 export default function Settings() {
   const queryClient = useQueryClient();
@@ -349,6 +96,17 @@ export default function Settings() {
   const { data: userMappings = [] } = useQuery({
     queryKey: ["user-team-mappings"],
     queryFn: fetchUserTeamMappings,
+  });
+
+  const { data: gustoEmployees = [] } = useQuery({
+    queryKey: ["gustoEmployees"],
+    queryFn: fetchGustoEmployees,
+    enabled: !!config?.gustoAccessToken && !!config?.gustoCompanyId,
+  });
+
+  const { data: gustoUserMappings = [], refetch: refetchGustoUserMappings } = useQuery({
+    queryKey: ["clickupGustoUserMappings"],
+    queryFn: fetchClickupGustoUserMappings,
   });
 
   useEffect(() => {
@@ -501,6 +259,29 @@ export default function Settings() {
     });
   };
 
+  const getGustoMapping = (clickupUserId: number): string | null => {
+    const mapping = gustoUserMappings.find(m => m.clickupUserId === clickupUserId);
+    return mapping?.gustoEmployeeId || null;
+  };
+
+  const handleGustoMappingChange = async (user: ClickUpUser, gustoEmployeeId: string) => {
+    const gustoEmployee = gustoEmployees.find(e => e.uuid === gustoEmployeeId);
+    try {
+      await saveClickupGustoUserMapping({
+        clickupUserId: user.id,
+        clickupUsername: user.username,
+        clickupEmail: user.email,
+        gustoEmployeeId: gustoEmployeeId === "none" ? null : gustoEmployeeId,
+        gustoEmployeeName: gustoEmployee?.name || null,
+        gustoEmployeeEmail: gustoEmployee?.email || null,
+      });
+      await refetchGustoUserMappings();
+      toast.success(`Gusto mapping updated for ${user.username}`);
+    } catch (error) {
+      toast.error("Failed to save Gusto mapping");
+    }
+  };
+
   return (
     <Layout>
       <div className="space-y-8">
@@ -512,8 +293,7 @@ export default function Settings() {
         <Tabs defaultValue="integrations" className="w-full">
           <TabsList className="mb-6">
             <TabsTrigger value="integrations" data-testid="tab-integrations">Integrations</TabsTrigger>
-            <TabsTrigger value="gusto-mappings" data-testid="tab-gusto-mappings">Gusto Mappings</TabsTrigger>
-            <TabsTrigger value="teams" data-testid="tab-teams">CU Team Management</TabsTrigger>
+            <TabsTrigger value="teams" data-testid="tab-mappings">Mappings</TabsTrigger>
             <TabsTrigger value="schedule" data-testid="tab-schedule">Schedule</TabsTrigger>
           </TabsList>
           
@@ -755,10 +535,6 @@ export default function Settings() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="gusto-mappings" className="space-y-6">
-            <GustoMappingsSection config={config} />
-          </TabsContent>
-
           <TabsContent value="teams" className="space-y-6">
             <Card>
               <CardHeader>
@@ -837,6 +613,7 @@ export default function Settings() {
                         <TableHead>ClickUp User</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead className="w-[200px]">Assigned Team</TableHead>
+                        <TableHead className="w-[250px]">Gusto Employee</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -857,6 +634,25 @@ export default function Settings() {
                                 {teams.map((team) => (
                                   <SelectItem key={team.id} value={team.id}>
                                     {team.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              value={getGustoMapping(user.id) || "none"}
+                              onValueChange={(value) => handleGustoMappingChange(user, value)}
+                              disabled={!config?.gustoAccessToken || !config?.gustoCompanyId}
+                            >
+                              <SelectTrigger data-testid={`select-gusto-employee-${user.id}`}>
+                                <SelectValue placeholder="Select employee..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">Not Mapped</SelectItem>
+                                {gustoEmployees.map((employee) => (
+                                  <SelectItem key={employee.uuid} value={employee.uuid}>
+                                    {employee.name} ({employee.email}){employee.type === "Contractor" ? " [Contractor]" : ""}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
