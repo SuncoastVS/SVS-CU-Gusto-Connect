@@ -246,6 +246,7 @@ export default function TimeEntries() {
       hours: entry.duration,
       date: new Date(entry.start),
       description: `${entry.taskName} - ${entry.folderName}`,
+      type: employee.type || "Employee" as "Employee" | "Contractor",
     }));
 
     syncToGustoMutation.mutate(entriesToSync);

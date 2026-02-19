@@ -201,6 +201,7 @@ export async function syncTimeToGusto(entries: Array<{
   hours: number;
   date: Date;
   description?: string;
+  type?: "Employee" | "Contractor";
 }>): Promise<GustoSyncResult> {
   const res = await fetch(`${API_BASE}/gusto/sync-time`, {
     method: "POST",
