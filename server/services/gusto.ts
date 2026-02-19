@@ -24,6 +24,8 @@ export interface GustoEmployee {
   first_name: string;
   last_name: string;
   email: string;
+  terminated: boolean;
+  current_employment_status: string;
   jobs: Array<{
     uuid: string;
     title: string;
@@ -37,6 +39,7 @@ export interface GustoContractor {
   last_name: string;
   email: string;
   type: string;
+  is_active: boolean;
 }
 
 export interface GustoTimeSheet {

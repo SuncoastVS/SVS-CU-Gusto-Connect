@@ -458,7 +458,10 @@ export async function registerRoutes(
         gusto.getContractors(config.gustoCompanyId),
       ]);
       
-      const formattedEmployees = employees.map(emp => ({
+      const activeEmployees = employees.filter(emp => !emp.terminated);
+      const activeContractors = contractors.filter(c => c.is_active !== false);
+
+      const formattedEmployees = activeEmployees.map(emp => ({
         uuid: emp.uuid,
         name: `${emp.first_name} ${emp.last_name}`,
         email: emp.email,
@@ -467,7 +470,7 @@ export async function registerRoutes(
         type: "Employee" as const,
       }));
 
-      const formattedContractors = contractors.map(contractor => ({
+      const formattedContractors = activeContractors.map(contractor => ({
         uuid: contractor.uuid,
         name: `${contractor.first_name} ${contractor.last_name}`,
         email: contractor.email,
