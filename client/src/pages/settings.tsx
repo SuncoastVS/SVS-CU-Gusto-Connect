@@ -81,6 +81,8 @@ export default function Settings() {
   const [showGustoClientSecret, setShowGustoClientSecret] = useState(false);
   const [showGustoAccessToken, setShowGustoAccessToken] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
+  const [teamFilter, setTeamFilter] = useState<string>("all");
+  const [nameSortAsc, setNameSortAsc] = useState<boolean>(true);
 
   const { data: teams = [] } = useQuery({
     queryKey: ["teams"],
@@ -607,6 +609,32 @@ export default function Settings() {
                     <p className="text-muted-foreground">Loading users from ClickUp...</p>
                   </div>
                 ) : (
+                  <>
+                  <div className="flex items-center gap-4 px-4 py-3 border-b">
+                    <div className="flex items-center gap-2">
+                      <Label className="text-sm whitespace-nowrap">Filter by Team:</Label>
+                      <Select value={teamFilter} onValueChange={setTeamFilter}>
+                        <SelectTrigger className="w-[180px]" data-testid="select-team-filter">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Teams</SelectItem>
+                          <SelectItem value="none">No Team</SelectItem>
+                          {teams.map((team) => (
+                            <SelectItem key={team.id} value={team.id}>{team.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setNameSortAsc(!nameSortAsc)}
+                      data-testid="button-sort-name"
+                    >
+                      Name {nameSortAsc ? "A-Z" : "Z-A"}
+                    </Button>
+                  </div>
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -617,7 +645,18 @@ export default function Settings() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {clickupUsers.map((user) => (
+                      {clickupUsers
+                        .filter((user) => {
+                          if (teamFilter === "all") return true;
+                          const userTeamId = getUserTeamId(user.id);
+                          if (teamFilter === "none") return !userTeamId;
+                          return userTeamId === teamFilter;
+                        })
+                        .sort((a, b) => {
+                          const cmp = a.username.localeCompare(b.username);
+                          return nameSortAsc ? cmp : -cmp;
+                        })
+                        .map((user) => (
                         <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
                           <TableCell className="font-medium">{user.username}</TableCell>
                           <TableCell className="text-muted-foreground">{user.email}</TableCell>
@@ -662,6 +701,7 @@ export default function Settings() {
                       ))}
                     </TableBody>
                   </Table>
+                  </>
                 )}
               </CardContent>
             </Card>
