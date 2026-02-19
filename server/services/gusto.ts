@@ -113,14 +113,14 @@ export class GustoService {
 
   async getEmployees(companyUuid: string): Promise<GustoEmployee[]> {
     return this.apiRequest<GustoEmployee[]>(
-      `/v1/companies/${companyUuid}/employees`
+      `/v1/companies/${companyUuid}/employees?per=100`
     );
   }
 
   async getContractors(companyUuid: string): Promise<GustoContractor[]> {
     try {
       return this.apiRequest<GustoContractor[]>(
-        `/v1/companies/${companyUuid}/contractors`
+        `/v1/companies/${companyUuid}/contractors?per=100`
       );
     } catch (error) {
       console.log("Contractors API not available, returning empty list:", error);
@@ -131,7 +131,7 @@ export class GustoService {
   async getProjects(companyUuid: string): Promise<GustoProject[]> {
     try {
       const response = await this.apiRequest<GustoProject[]>(
-        `/v1/companies/${companyUuid}/projects`
+        `/v1/companies/${companyUuid}/projects?per=100`
       );
       return response;
     } catch (error) {
