@@ -15,11 +15,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Clock, RefreshCw, AlertCircle, User, Search, FolderOpen, X, ExternalLink, Users, CalendarDays, CalendarRange, Send, Loader2, CheckCircle2, Layers } from "lucide-react";
+import { Clock, RefreshCw, AlertCircle, User, Search, FolderOpen, X, ExternalLink, Users, CalendarDays, CalendarRange, Send, Loader2, CheckCircle2, Layers, Download } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { fetchClickUpTimeEntries, fetchConfiguration, fetchGustoEmployees, syncTimeToGusto, type GustoEmployee, type ClickUpTimeEntry } from "@/lib/api";
 import { Link } from "wouter";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { format, getDaysInMonth } from "date-fns";
 import { toast } from "sonner";
 
@@ -251,6 +251,50 @@ export default function TimeEntries() {
 
     syncToGustoMutation.mutate(entriesToSync);
   };
+
+  const handleDownloadExcel = useCallback(async () => {
+    try {
+      const XLSX = await import("xlsx");
+
+      const rows = filteredEntries.map(entry => ({
+        Space: entry.spaceName,
+        Folder: entry.folderName,
+        "Task Name": entry.taskName,
+        Hours: Number(entry.duration.toFixed(2)),
+        Date: entry.start ? format(new Date(parseInt(entry.start)), "MM/dd/yyyy") : "",
+        Team: entry.teamName,
+        User: entry.user,
+        Billable: entry.billable ? "Yes" : "No",
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Time Entries");
+
+      const colWidths = [
+        { wch: 18 },
+        { wch: 22 },
+        { wch: 40 },
+        { wch: 8 },
+        { wch: 12 },
+        { wch: 18 },
+        { wch: 20 },
+        { wch: 10 },
+      ];
+      ws["!cols"] = colWidths;
+
+      let filename = "time-entries";
+      if (getActiveDateRange) {
+        const startStr = format(getActiveDateRange.start, "MMM-d");
+        const endStr = format(getActiveDateRange.end, "MMM-d-yyyy");
+        filename = `time-entries-${startStr}-${endStr}`;
+      }
+
+      XLSX.writeFile(wb, `${filename}.xlsx`);
+    } catch (err) {
+      toast.error("Failed to generate Excel file");
+    }
+  }, [filteredEntries, getActiveDateRange]);
 
   const totalHours = filteredEntries.reduce((sum, entry) => sum + entry.duration, 0);
 
@@ -594,42 +638,54 @@ export default function TimeEntries() {
                       </CardDescription>
                     </div>
                     
-                    {isGustoConnected && filteredEntries.length > 0 && (
+                    {filteredEntries.length > 0 && (
                       <div className="flex flex-col sm:items-end gap-2">
-                        <Button
-                          onClick={handleSendToGusto}
-                          disabled={syncToGustoMutation.isPending || matchedEntries.length === 0}
-                          className="gap-2"
-                          data-testid="button-send-to-gusto"
-                        >
-                          {syncToGustoMutation.isPending ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              Syncing...
-                            </>
-                          ) : (
-                            <>
-                              <Send className="w-4 h-4" />
-                              Send to Gusto ({matchedEntries.length})
-                            </>
+                        <div className="flex items-center gap-2">
+                          {isGustoConnected && (
+                            <Button
+                              onClick={handleSendToGusto}
+                              disabled={syncToGustoMutation.isPending || matchedEntries.length === 0}
+                              className="gap-2"
+                              data-testid="button-send-to-gusto"
+                            >
+                              {syncToGustoMutation.isPending ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Syncing...
+                                </>
+                              ) : (
+                                <>
+                                  <Send className="w-4 h-4" />
+                                  Send to Gusto ({matchedEntries.length})
+                                </>
+                              )}
+                            </Button>
                           )}
-                        </Button>
-                        {matchedEntries.length < filteredEntries.length && (
+                          {!isGustoConnected && (
+                            <Link href="/settings">
+                              <Button variant="outline" className="gap-2" data-testid="button-connect-gusto-prompt">
+                                <Send className="w-4 h-4" />
+                                Connect Gusto to Sync
+                              </Button>
+                            </Link>
+                          )}
+                          <Button
+                            variant="outline"
+                            onClick={handleDownloadExcel}
+                            className="gap-2"
+                            data-testid="button-download-excel"
+                          >
+                            <Download className="w-4 h-4" />
+                            Download Excel
+                          </Button>
+                        </div>
+                        {isGustoConnected && matchedEntries.length < filteredEntries.length && (
                           <p className="text-xs text-muted-foreground">
                             {filteredEntries.length - matchedEntries.length} entries could not be matched to Gusto employees
                             {unmatchedUsers.length > 0 && ` (${unmatchedUsers.join(", ")})`}
                           </p>
                         )}
                       </div>
-                    )}
-                    
-                    {!isGustoConnected && filteredEntries.length > 0 && (
-                      <Link href="/settings">
-                        <Button variant="outline" className="gap-2" data-testid="button-connect-gusto-prompt">
-                          <Send className="w-4 h-4" />
-                          Connect Gusto to Sync
-                        </Button>
-                      </Link>
                     )}
                   </div>
                 </CardHeader>
