@@ -13,6 +13,10 @@ import { z } from "zod";
 import { ClickUpService, matchTaskToRule, convertMillisecondsToHours } from "./services/clickup";
 import { GustoService } from "./services/gusto";
 
+function getClickUpApiKey(): string | undefined {
+  return process.env.CLICKUP_API_KEY;
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -22,7 +26,9 @@ export async function registerRoutes(
   app.get("/api/configuration", async (req, res) => {
     try {
       const config = await storage.getConfiguration();
-      res.json(config || {});
+      const configData = config || {};
+      const result = { ...configData, clickupApiKeyConfigured: !!getClickUpApiKey() };
+      res.json(result);
     } catch (error) {
       console.error("Error fetching configuration:", error);
       res.status(500).json({ error: "Failed to fetch configuration" });
@@ -159,11 +165,12 @@ export async function registerRoutes(
     try {
       const config = await storage.getConfiguration();
       
-      if (!config?.clickupApiKey || !config?.clickupTeamId) {
+      const clickupApiKey = getClickUpApiKey();
+      if (!clickupApiKey || !config?.clickupTeamId) {
         return res.status(400).json({ error: "ClickUp not fully configured" });
       }
 
-      const clickup = new ClickUpService(config.clickupApiKey);
+      const clickup = new ClickUpService(clickupApiKey);
       const members = await clickup.getTeamMembers(config.clickupTeamId);
       
       res.json(members);
@@ -178,11 +185,12 @@ export async function registerRoutes(
     try {
       const config = await storage.getConfiguration();
       
-      if (!config?.clickupApiKey) {
-        return res.status(400).json({ error: "ClickUp API key not configured" });
+      const clickupApiKey = getClickUpApiKey();
+      if (!clickupApiKey) {
+        return res.status(400).json({ error: "ClickUp API key not configured. Add CLICKUP_API_KEY to your environment secrets." });
       }
 
-      const clickup = new ClickUpService(config.clickupApiKey);
+      const clickup = new ClickUpService(clickupApiKey);
       const result = await clickup.testConnection();
       
       res.json(result);
@@ -199,11 +207,12 @@ export async function registerRoutes(
     try {
       const config = await storage.getConfiguration();
       
-      if (!config?.clickupApiKey) {
-        return res.status(400).json({ error: "ClickUp API key not configured" });
+      const clickupApiKey = getClickUpApiKey();
+      if (!clickupApiKey) {
+        return res.status(400).json({ error: "ClickUp API key not configured. Add CLICKUP_API_KEY to your environment secrets." });
       }
 
-      const clickup = new ClickUpService(config.clickupApiKey);
+      const clickup = new ClickUpService(clickupApiKey);
       const teams = await clickup.getTeams();
       
       res.json(teams);
@@ -217,11 +226,12 @@ export async function registerRoutes(
     try {
       const config = await storage.getConfiguration();
       
-      if (!config?.clickupApiKey || !config?.clickupTeamId) {
+      const clickupApiKey = getClickUpApiKey();
+      if (!clickupApiKey || !config?.clickupTeamId) {
         return res.status(400).json({ error: "ClickUp not fully configured" });
       }
 
-      const clickup = new ClickUpService(config.clickupApiKey);
+      const clickup = new ClickUpService(clickupApiKey);
       
       let startDate: Date;
       let endDate: Date;
@@ -292,9 +302,10 @@ export async function registerRoutes(
     try {
       const config = await storage.getConfiguration();
       
-      if (!config?.clickupApiKey) {
+      const clickupApiKey = getClickUpApiKey();
+      if (!clickupApiKey) {
         return res.status(400).json({ 
-          error: "ClickUp API key not configured. Go to Settings to add it." 
+          error: "ClickUp API key not configured. Add CLICKUP_API_KEY to your environment secrets." 
         });
       }
 
@@ -317,7 +328,7 @@ export async function registerRoutes(
       setImmediate(async () => {
         const startTime = Date.now();
         try {
-          const clickup = new ClickUpService(config.clickupApiKey!);
+          const clickup = new ClickUpService(clickupApiKey);
           const rules = await storage.getMappingRules();
           
           const endDate = new Date();
@@ -536,11 +547,12 @@ export async function registerRoutes(
     try {
       const config = await storage.getConfiguration();
       
-      if (!config?.clickupApiKey || !config?.clickupTeamId) {
+      const clickupApiKey = getClickUpApiKey();
+      if (!clickupApiKey || !config?.clickupTeamId) {
         return res.status(400).json({ error: "ClickUp not fully configured" });
       }
 
-      const clickup = new ClickUpService(config.clickupApiKey);
+      const clickup = new ClickUpService(clickupApiKey);
       await clickup.loadSpacesForTeam(config.clickupTeamId);
       
       const response = await clickup.getSpaces(config.clickupTeamId);

@@ -51,7 +51,6 @@ export default function Settings() {
   });
 
   const [formData, setFormData] = useState({
-    clickupApiKey: "",
     clickupTeamId: "",
     gustoClientId: "",
     gustoClientSecret: "",
@@ -77,7 +76,6 @@ export default function Settings() {
   const [clickupTeams, setClickupTeams] = useState<ClickUpTeam[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
   const [gustoConnectionStatus, setGustoConnectionStatus] = useState<"idle" | "testing" | "success" | "error">("idle");
-  const [showApiKey, setShowApiKey] = useState(false);
   const [showGustoClientSecret, setShowGustoClientSecret] = useState(false);
   const [showGustoAccessToken, setShowGustoAccessToken] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
@@ -92,7 +90,7 @@ export default function Settings() {
   const { data: clickupUsers = [] } = useQuery({
     queryKey: ["clickup-users"],
     queryFn: fetchClickUpUsers,
-    enabled: !!config?.clickupApiKey && !!config?.clickupTeamId,
+    enabled: !!(config as any)?.clickupApiKeyConfigured && !!config?.clickupTeamId,
   });
 
   const { data: userMappings = [] } = useQuery({
@@ -114,7 +112,6 @@ export default function Settings() {
   useEffect(() => {
     if (config) {
       setFormData({
-        clickupApiKey: config.clickupApiKey || "",
         clickupTeamId: config.clickupTeamId || "",
         gustoClientId: config.gustoClientId || "",
         gustoClientSecret: config.gustoClientSecret || "",
@@ -124,7 +121,7 @@ export default function Settings() {
         syncFrequency: config.syncFrequency || "daily",
         syncTime: config.syncTime || "00:00",
       });
-      if (config.clickupApiKey) {
+      if ((config as any).clickupApiKeyConfigured) {
         setConnectionStatus("success");
       }
       if (config.gustoAccessToken && config.gustoCompanyId) {
@@ -323,29 +320,20 @@ export default function Settings() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="clickupKey">API Key</Label>
-                  <div className="relative">
-                    <Input
-                      id="clickupKey"
-                      type={showApiKey ? "text" : "password"}
-                      placeholder="pk_..."
-                      value={formData.clickupApiKey}
-                      onChange={(e) => setFormData({ ...formData, clickupApiKey: e.target.value })}
-                      data-testid="input-clickup-key"
-                      className="pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowApiKey(!showApiKey)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                      data-testid="button-toggle-api-key"
-                    >
-                      {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
+                  <Label>API Key</Label>
+                  <div className="flex items-center gap-2 p-3 rounded-md border bg-muted/50">
+                    {(config as any)?.clickupApiKeyConfigured ? (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-green-600" />
+                        <span className="text-sm">API key configured via environment secret</span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle className="w-4 h-4 text-amber-500" />
+                        <span className="text-sm">No API key found. Add <code className="bg-muted px-1 rounded">CLICKUP_API_KEY</code> to your environment secrets.</span>
+                      </>
+                    )}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Get your API key from ClickUp Settings → Apps → API Token
-                  </p>
                 </div>
 
                 {clickupTeams.length > 0 && (
@@ -389,7 +377,7 @@ export default function Settings() {
                 <Button 
                   variant="outline"
                   onClick={handleTestConnection}
-                  disabled={!formData.clickupApiKey || testConnectionMutation.isPending || updateMutation.isPending}
+                  disabled={!(config as any)?.clickupApiKeyConfigured || testConnectionMutation.isPending || updateMutation.isPending}
                   data-testid="button-test-clickup"
                 >
                   {testConnectionMutation.isPending ? (
@@ -596,7 +584,7 @@ export default function Settings() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-0">
-                {!config?.clickupApiKey || !config?.clickupTeamId ? (
+                {!(config as any)?.clickupApiKeyConfigured || !config?.clickupTeamId ? (
                   <div className="text-center py-12">
                     <AlertCircle className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                     <p className="text-muted-foreground">

@@ -95,7 +95,7 @@ export default function TimeEntries() {
     queryFn: fetchConfiguration,
   });
 
-  const isConfigured = config?.clickupApiKey && config?.clickupTeamId;
+  const isConfigured = (config as any)?.clickupApiKeyConfigured && config?.clickupTeamId;
 
   const getActiveDateRange = useMemo(() => {
     if (dateMode === "biweekly") {

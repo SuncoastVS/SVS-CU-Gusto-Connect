@@ -61,7 +61,7 @@ Preferred communication style: Simple, everyday language.
 
 **Schema Design**
 - `users` table: Basic authentication (username/password)
-- `configurations` table: Single-row config store for API keys and sync settings (ClickUp API key, team ID, Gusto tokens, QuickBooks connection status, sync frequency/time)
+- `configurations` table: Single-row config store for sync settings (team ID, Gusto tokens, QuickBooks connection status, sync frequency/time). Note: ClickUp API key is stored as an environment secret (`CLICKUP_API_KEY`), not in the database.
 - `mappingRules` table: Pattern-based rules for matching ClickUp tasks to QuickBooks jobs (supports pattern matching with priority ordering)
 - `syncLogs` table: Audit trail of sync operations with status, timestamps, and record counts
 
@@ -103,6 +103,7 @@ Preferred communication style: Simple, everyday language.
 
 **Environment Configuration**
 - `DATABASE_URL` required for PostgreSQL connection
+- `CLICKUP_API_KEY` required for ClickUp API access (stored as environment secret, not in database)
 - Development mode uses tsx for TypeScript execution
 - Production mode runs compiled JavaScript with NODE_ENV check
 - Drizzle migrations via `db:push` script

@@ -42,7 +42,7 @@ export default function Dashboard() {
   });
 
   const latestLog = logs[0];
-  const isConfigured = config?.clickupApiKey && config?.clickupTeamId;
+  const isConfigured = (config as any)?.clickupApiKeyConfigured && config?.clickupTeamId;
 
   return (
     <Layout>
@@ -122,18 +122,18 @@ export default function Dashboard() {
                   <div>
                     <div className="font-medium">ClickUp</div>
                     <div className="text-xs text-muted-foreground">
-                      {config?.clickupApiKey ? "Connected" : "Not configured"}
+                      {(config as any)?.clickupApiKeyConfigured ? "Connected" : "Not configured"}
                     </div>
                   </div>
                 </div>
                 <Badge 
                   variant="outline" 
-                  className={config?.clickupApiKey 
+                  className={(config as any)?.clickupApiKeyConfigured 
                     ? "bg-green-50 text-green-700 border-green-200" 
                     : "bg-amber-50 text-amber-700 border-amber-200"}
                   data-testid="badge-clickup-status"
                 >
-                  {config?.clickupApiKey ? "Active" : "Pending"}
+                  {(config as any)?.clickupApiKeyConfigured ? "Active" : "Pending"}
                 </Badge>
               </div>
 
